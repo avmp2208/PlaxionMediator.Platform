@@ -1,0 +1,234 @@
+using Platform.Storage;
+
+namespace Platform.Storage.Tests;
+
+/// <summary>
+/// Provider-agnostic conformance suite. Concrete providers (in-memory, SQLite)
+/// supply store instances via <see cref="CreateStoresAsync"/>.
+/// </summary>
+public abstract class StorageProviderConformanceTests
+{
+    protected abstract Task<StorageHandles> CreateStoresAsync();
+
+    protected virtual Task DisposeStoresAsync(StorageHandles handles) => Task.CompletedTask;
+
+    /// <summary>
+    /// Optional second handle pair against the same durable backend (e.g. same
+    /// SQLite file) used to prove restart/persistence. Null for pure in-memory.
+    /// </summary>
+    protected virtual Task<StorageHandles?> RecreateStoresAsync(StorageHandles original) =>
+        Task.FromResult<StorageHandles?>(null);
+
+    [Fact]
+    public async Task MetricSample_WriteRead_RoundTrips()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantId = Guid.NewGuid();
+            var sample = NewSample(tenantId, "svc", "prod", "cpu", 42, DateTimeOffset.UtcNow);
+
+            await handles.Samples.AddAsync(sample);
+            var results = await handles.Samples.GetByTenantAsync(tenantId);
+
+            var single = Assert.Single(results);
+            Assert.Equal(sample.Id, single.Id);
+            Assert.Equal(sample.MetricName, single.MetricName);
+            Assert.Equal(sample.Value, single.Value);
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    [Fact]
+    public async Task MetricSample_TenantIsolation_TenantBCannotReadTenantA()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantA = Guid.NewGuid();
+            var tenantB = Guid.NewGuid();
+            await handles.Samples.AddAsync(NewSample(tenantA, "svc", "prod", "cpu", 1, DateTimeOffset.UtcNow));
+
+            Assert.Empty(await handles.Samples.GetByTenantAsync(tenantB));
+            Assert.Single(await handles.Samples.GetByTenantAsync(tenantA));
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    [Fact]
+    public async Task MetricSample_TimeRangeFiltering()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantId = Guid.NewGuid();
+            var t0 = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            await handles.Samples.AddAsync(NewSample(tenantId, "svc", "prod", "cpu", 1, t0.AddHours(-2)));
+            await handles.Samples.AddAsync(NewSample(tenantId, "svc", "prod", "cpu", 2, t0));
+            await handles.Samples.AddAsync(NewSample(tenantId, "svc", "prod", "cpu", 3, t0.AddHours(2)));
+
+            var mid = await handles.Samples.QueryAsync(tenantId, from: t0.AddHours(-1), to: t0.AddHours(1));
+            var single = Assert.Single(mid);
+            Assert.Equal(2, single.Value);
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    [Fact]
+    public async Task MetricSample_RespectsCancellation()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                handles.Samples.AddAsync(NewSample(Guid.NewGuid(), "s", "e", "m", 1, DateTimeOffset.UtcNow), cts.Token));
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    [Fact]
+    public async Task ServiceCatalog_GetOrCreate_List_AndCrossTenant()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantA = Guid.NewGuid();
+            var tenantB = Guid.NewGuid();
+            var a = await handles.Catalog.GetOrCreateAsync(tenantA, "checkout", "prod");
+            var a2 = await handles.Catalog.GetOrCreateAsync(tenantA, "checkout", "prod");
+            await handles.Catalog.GetOrCreateAsync(tenantB, "other", "prod");
+
+            Assert.Equal(a.Id, a2.Id);
+            Assert.Single(await handles.Catalog.ListByTenantAsync(tenantA));
+            Assert.NotNull(await handles.Catalog.GetByIdAsync(tenantA, a.Id));
+            Assert.Null(await handles.Catalog.GetByIdAsync(tenantB, a.Id));
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    [Fact]
+    public async Task AggregateRollup_PersistsAndFiltersByTenantTimeRange()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantA = Guid.NewGuid();
+            var tenantB = Guid.NewGuid();
+            var serviceId = ServiceIdGenerator.Compute(tenantA, "checkout", "prod");
+            var now = DateTimeOffset.UtcNow;
+
+            await handles.Rollups.AddRangeAsync(new[]
+            {
+                new AggregateRollup
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantA,
+                    ServiceName = "checkout",
+                    Environment = "prod",
+                    MetricName = "latency",
+                    BucketStart = now.AddMinutes(-1),
+                    BucketEnd = now,
+                    Count = 2,
+                    Min = 1,
+                    Max = 3,
+                    Avg = 2,
+                    P50 = 2,
+                    P95 = 3,
+                    P99 = 3
+                }
+            });
+
+            Assert.Single(await handles.Rollups.QueryAsync(tenantA, serviceId, now.AddHours(-1), now.AddHours(1)));
+            Assert.Empty(await handles.Rollups.QueryAsync(tenantB, serviceId, now.AddHours(-1), now.AddHours(1)));
+            Assert.Empty(await handles.Rollups.QueryAsync(tenantA, serviceId, now.AddHours(-5), now.AddHours(-4)));
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    [Fact]
+    public async Task MetricSample_RestartPersistence_WhenSupported()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantId = Guid.NewGuid();
+            var sample = NewSample(tenantId, "svc", "prod", "cpu", 99, DateTimeOffset.UtcNow);
+            await handles.Samples.AddAsync(sample);
+
+            var recreated = await RecreateStoresAsync(handles);
+            if (recreated is null)
+            {
+                return; // provider is not durable
+            }
+
+            try
+            {
+                var results = await recreated.Samples.GetByTenantAsync(tenantId);
+                var single = Assert.Single(results);
+                Assert.Equal(sample.Id, single.Id);
+                Assert.Equal(99, single.Value);
+            }
+            finally
+            {
+                await DisposeStoresAsync(recreated);
+            }
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    private static MetricSample NewSample(
+        Guid tenantId,
+        string service,
+        string env,
+        string metric,
+        double value,
+        DateTimeOffset ts) => new()
+    {
+        Id = Guid.NewGuid(),
+        TenantId = tenantId,
+        ServiceName = service,
+        Environment = env,
+        MetricName = metric,
+        Value = value,
+        Timestamp = ts
+    };
+
+    public record StorageHandles(
+        IMetricSampleStore Samples,
+        IAggregateRollupStore Rollups,
+        IServiceCatalog Catalog,
+        IApiKeyStore ApiKeys);
+}
+
+public sealed class InMemoryStorageConformanceTests : StorageProviderConformanceTests
+{
+    protected override Task<StorageHandles> CreateStoresAsync() =>
+        Task.FromResult(new StorageHandles(
+            new InMemoryMetricSampleStore(),
+            new InMemoryAggregateRollupStore(),
+            new InMemoryServiceCatalog(),
+            new InMemoryApiKeyStore()));
+}

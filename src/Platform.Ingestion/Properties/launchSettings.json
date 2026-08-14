@@ -1,0 +1,16 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5292",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Storage__Provider": "Sqlite",
+        "ConnectionStrings__Platform": "Data Source=C:\\Users\\Angel\\RiderProjects\\PlaxionMediator.Platform\\.data\\platform-dev.db"
+      }
+    }
+  }
+}

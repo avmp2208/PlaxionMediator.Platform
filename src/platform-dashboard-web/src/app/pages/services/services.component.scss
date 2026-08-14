@@ -1,0 +1,84 @@
+.page-header {
+  margin-bottom: 20px;
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+  }
+}
+
+.page-subtitle {
+  color: var(--app-text-secondary);
+  margin: 0;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--app-text-secondary);
+  padding: 40px 0;
+}
+
+.empty-card {
+  padding: 40px;
+  text-align: center;
+  background: var(--app-surface);
+  border: 1px dashed var(--app-border);
+
+  .empty-icon {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--app-text-secondary);
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+  }
+
+  p {
+    color: var(--app-text-secondary);
+    margin: 0;
+  }
+
+  code {
+    background: var(--app-surface-raised);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+}
+
+.table-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  padding: 0;
+  overflow: hidden;
+}
+
+.services-table {
+  width: 100%;
+  background: transparent;
+}
+
+.service-link {
+  font-weight: 500;
+}
+
+.service-row:hover {
+  background: var(--app-surface-raised);
+}
+
+.env-chip {
+  background: var(--app-surface-raised) !important;
+  color: var(--app-text-secondary) !important;
+  font-size: 0.75rem !important;
+  min-height: 24px !important;
+}
+
+.env-production {
+  background: rgba(76, 175, 80, 0.15) !important;
+  color: var(--app-success) !important;
+}

@@ -6,7 +6,7 @@
 ## has more thorough IDE-specific entries.
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/Dotnet.gitignore
-
+.idea/
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -38,6 +38,22 @@ ScaffoldingReadMe.txt
 
 # dotenv environment variables file
 .env
+
+# Local-dev seeded API key (plaintext; never commit)
+.dev-api-key
+**/.dev-api-key
+*.db
+*.db-shm
+*.db-wal
+
+# Local-dev shared SQLite data directory (see launchSettings.json)
+.data/
+
+# Angular Dashboard (src/platform-dashboard-web) build/deps
+# (workspace also has its own .gitignore covering these)
+node_modules/
+dist/
+.angular/
 
 # Others
 ~$*

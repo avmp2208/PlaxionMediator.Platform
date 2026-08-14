@@ -1,0 +1,108 @@
+.page-header {
+  margin-bottom: 16px;
+
+  h1 {
+    margin: 8px 0 4px;
+    font-size: 1.5rem;
+  }
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--app-text-secondary);
+  text-decoration: none;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover {
+    color: var(--app-accent);
+  }
+}
+
+.page-subtitle {
+  color: var(--app-text-secondary);
+  margin: 0;
+}
+
+.range-toolbar {
+  margin-bottom: 20px;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--app-text-secondary);
+  padding: 40px 0;
+}
+
+.empty-card {
+  padding: 40px;
+  text-align: center;
+  background: var(--app-surface);
+  border: 1px dashed var(--app-border);
+
+  .empty-icon {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--app-text-secondary);
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+  }
+
+  p {
+    color: var(--app-text-secondary);
+    margin: 0;
+  }
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+}
+
+.metric-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+
+  h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-family: 'Roboto Mono', monospace;
+  }
+}
+
+.unit-badge {
+  font-size: 0.7rem;
+  color: var(--app-text-secondary);
+  background: var(--app-surface-raised);
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+
+.metric-table {
+  width: 100%;
+  background: transparent;
+}
