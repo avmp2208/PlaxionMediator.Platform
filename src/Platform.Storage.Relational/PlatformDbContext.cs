@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Platform.Storage.Sqlite;
+namespace Platform.Storage.Relational;
 
 /// <summary>
-/// EF Core DbContext for the SQLite reference provider. EF types stay inside
-/// this project; callers only see Platform.Storage interfaces/models.
+/// EF Core DbContext shared by the SQLite, MySQL and PostgreSQL providers. EF
+/// types stay inside this project; callers only see Platform.Storage
+/// interfaces/models.
 /// </summary>
 public sealed class PlatformDbContext : DbContext
 {

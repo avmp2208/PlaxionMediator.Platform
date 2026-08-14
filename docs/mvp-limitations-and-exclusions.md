@@ -13,7 +13,7 @@
 - No request rate limiting (body size + cardinality guards only).
 - No self-observability (Platform dogfooding its own metrics/traces).
 - Single-region, single-instance assumption; no HA/scaling story.
-- SQLite is the only durable provider; Postgres provider not built (interfaces ready).
+- Durable storage supports SQLite, MySQL and PostgreSQL (selected via `Storage:Provider`); MySQL/PostgreSQL are not yet covered by conformance tests against real servers.
 
 ## What is implemented (not limitations anymore)
 - Real OTLP/HTTP protobuf receiver with TenantId-from-API-key only.

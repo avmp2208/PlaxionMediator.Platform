@@ -17,7 +17,7 @@
 #### Architecture (implemented)
 ```
 Platform.Storage          → canonical models + interfaces + in-memory impl
-Platform.Storage.Sqlite   → EF Core DbContext + SQLite implementations only
+Platform.Storage.Relational → EF Core DbContext + SQLite/MySQL/PostgreSQL implementations
 Platform.Hosting          → environment-aware DI registration helper
 ```
 
@@ -28,13 +28,18 @@ Interfaces (provider-neutral):
 - `IApiKeyStore`
 
 #### Decision
-**SQLite via EF Core is the MVP reference durable provider**, encapsulated entirely behind `Platform.Storage` interfaces. EF types never leak outside `Platform.Storage.Sqlite`.
+**EF Core is the durable storage layer, supporting SQLite, MySQL and PostgreSQL as interchangeable providers**, encapsulated entirely behind `Platform.Storage` interfaces. EF types never leak outside `Platform.Storage.Relational`. All three share the same `PlatformDbContext`/entities; only the `UseSqlite`/`UseMySQL`/`UseNpgsql` call and the connection string differ.
+
+This is fully agnostic to the services (e.g. OTLP producers) that push data into the ingestion metrics endpoint - they never see or configure a database provider.
 
 In-memory remains the default for Development and Testing environments.
 
-Registration (`Platform.Hosting.AddPlatformStorage`):
-- Uses **SQLite** when `Storage:Provider=Sqlite`, or when environment is not Development/Testing and `ConnectionStrings:Platform` is set.
-- Uses **InMemory** when `Storage:Provider=InMemory`, or in Development/Testing by default.
+Registration (`Platform.Hosting.AddPlatformStorage`) reads `Storage:Provider` + `ConnectionStrings:Platform`:
+- `Sqlite` (default durable choice) → `AddPlatformSqliteStorage`.
+- `MySql` → `AddPlatformMySqlStorage` (MySql.EntityFrameworkCore).
+- `Postgres` (or `PostgreSql`) → `AddPlatformPostgresStorage` (Npgsql.EntityFrameworkCore.PostgreSQL).
+- `InMemory`, or no explicit provider while in Development/Testing → in-memory.
+- Any other non-empty `Storage:Provider` value forces durable storage even in Development/Testing (useful for demos).
 
 Example production config (same connection string on Ingestion + Api):
 ```json
@@ -46,7 +51,27 @@ Example production config (same connection string on Ingestion + Api):
 }
 ```
 
+MySQL:
+```json
+{
+  "Storage": { "Provider": "MySql" },
+  "ConnectionStrings": {
+    "Platform": "Server=mysql-host;Database=platform;User=platform;Password=***;"
+  }
+}
+```
+
+PostgreSQL:
+```json
+{
+  "Storage": { "Provider": "Postgres" },
+  "ConnectionStrings": {
+    "Platform": "Host=postgres-host;Database=platform;Username=platform;Password=***;"
+  }
+}
+```
+
 #### Current implementation status
 - SQLite provider implemented and covered by conformance tests (write/read, restart persistence against the same file, tenant isolation, catalog, rollups, time-range, cancellation).
 - Shared-file integration test: Ingestion writes samples; Api aggregates and reads rollups via separate hosts pointed at one SQLite file.
-- Postgres remains a future provider swap (new project implementing the same interfaces), not started.
+- MySQL and PostgreSQL providers are wired via the same `PlatformDbContext`/store implementations and selectable via `Storage:Provider`; they are not yet covered by conformance tests against real servers (no CI database service configured).

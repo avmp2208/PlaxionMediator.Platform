@@ -12,7 +12,7 @@ using Platform.Aggregation;
 using Platform.Api;
 using Platform.Identity;
 using Platform.Storage;
-using Platform.Storage.Sqlite;
+using Platform.Storage.Relational;
 using Xunit;
 
 namespace Platform.Api.Tests;
@@ -66,9 +66,9 @@ public sealed class SharedSqlitePersistenceTests : IAsyncLifetime
         _ = ingestionFactory.Server;
         _ = apiFactory.Server;
 
-        Assert.IsType<SqliteMetricSampleStore>(ingestionFactory.Services.GetRequiredService<IMetricSampleStore>());
-        Assert.IsType<SqliteMetricSampleStore>(apiFactory.Services.GetRequiredService<IMetricSampleStore>());
-        Assert.IsType<SqliteApiKeyStore>(apiFactory.Services.GetRequiredService<IApiKeyStore>());
+        Assert.IsType<RelationalMetricSampleStore>(ingestionFactory.Services.GetRequiredService<IMetricSampleStore>());
+        Assert.IsType<RelationalMetricSampleStore>(apiFactory.Services.GetRequiredService<IMetricSampleStore>());
+        Assert.IsType<RelationalApiKeyStore>(apiFactory.Services.GetRequiredService<IApiKeyStore>());
 
         var tenantId = Guid.NewGuid();
         string apiKey;
@@ -153,7 +153,7 @@ public sealed class SharedSqlitePersistenceTests : IAsyncLifetime
             var remove = services
                 .Where(d => types.Contains(d.ServiceType)
                             || (d.ImplementationType is not null
-                                && d.ImplementationType.Namespace == "Platform.Storage.Sqlite")
+                                && d.ImplementationType.Namespace == "Platform.Storage.Relational")
                             || d.ServiceType.FullName?.Contains("PlatformDbContext") == true
                             || d.ServiceType.FullName?.Contains("SqliteSchemaInitializer") == true
                             || (d.ImplementationType?.Name.Contains("SqliteSchemaInitializer") ?? false)

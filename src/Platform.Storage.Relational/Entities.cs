@@ -1,4 +1,4 @@
-namespace Platform.Storage.Sqlite;
+namespace Platform.Storage.Relational;
 
 // SQLite/EF has limited DateTimeOffset translation support, so timestamps
 // are stored as UTC DateTime and converted at the store boundary.

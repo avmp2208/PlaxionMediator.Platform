@@ -25,11 +25,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Aggregation.Tests"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Api.Tests", "tests\Platform.Api.Tests\Platform.Api.Tests.csproj", "{5FA220E7-67D1-4996-9D78-B5DF7BEFD90C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Storage.Sqlite", "src\Platform.Storage.Sqlite\Platform.Storage.Sqlite.csproj", "{F4557F90-9355-45FA-8A20-B798E37B707B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Storage.Relational", "src\Platform.Storage.Relational\Platform.Storage.Relational.csproj", "{F4557F90-9355-45FA-8A20-B798E37B707B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Hosting", "src\Platform.Hosting\Platform.Hosting.csproj", "{44610922-DDA1-40D1-A78C-BA52400A130B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Storage.Sqlite.Tests", "tests\Platform.Storage.Sqlite.Tests\Platform.Storage.Sqlite.Tests.csproj", "{AD4AC31C-81FF-4A3F-BA53-00835EB8D7C1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Storage.Relational.Tests", "tests\Platform.Storage.Relational.Tests\Platform.Storage.Relational.Tests.csproj", "{AD4AC31C-81FF-4A3F-BA53-00835EB8D7C1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

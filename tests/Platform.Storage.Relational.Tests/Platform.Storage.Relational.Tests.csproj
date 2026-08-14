@@ -21,7 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Platform.Storage\Platform.Storage.csproj" />
-    <ProjectReference Include="..\..\src\Platform.Storage.Sqlite\Platform.Storage.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\Platform.Storage.Relational\Platform.Storage.Relational.csproj" />
     <ProjectReference Include="..\Platform.Storage.Tests\Platform.Storage.Tests.csproj" />
   </ItemGroup>
 

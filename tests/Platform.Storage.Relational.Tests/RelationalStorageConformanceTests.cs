@@ -1,12 +1,12 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Platform.Storage;
-using Platform.Storage.Sqlite;
+using Platform.Storage.Relational;
 using Platform.Storage.Tests;
 
-namespace Platform.Storage.Sqlite.Tests;
+namespace Platform.Storage.Relational.Tests;
 
-public sealed class SqliteStorageConformanceTests : StorageProviderConformanceTests
+public sealed class RelationalStorageConformanceTests : StorageProviderConformanceTests
 {
     protected override async Task<StorageHandles> CreateStoresAsync()
     {
@@ -80,10 +80,10 @@ public sealed class SqliteStorageConformanceTests : StorageProviderConformanceTe
         }
 
         return new SqliteHandles(
-            new SqliteMetricSampleStore(factory),
-            new SqliteAggregateRollupStore(factory),
-            new SqliteServiceCatalog(factory),
-            new SqliteApiKeyStore(factory),
+            new RelationalMetricSampleStore(factory),
+            new RelationalAggregateRollupStore(factory),
+            new RelationalServiceCatalog(factory),
+            new RelationalApiKeyStore(factory),
             factory,
             connectionString,
             path,

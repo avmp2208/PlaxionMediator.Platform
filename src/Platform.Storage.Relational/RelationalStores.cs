@@ -1,12 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Platform.Storage.Sqlite;
+namespace Platform.Storage.Relational;
 
-public sealed class SqliteMetricSampleStore : IMetricSampleStore
+public sealed class RelationalMetricSampleStore : IMetricSampleStore
 {
     private readonly IDbContextFactory<PlatformDbContext> _dbFactory;
 
-    public SqliteMetricSampleStore(IDbContextFactory<PlatformDbContext> dbFactory)
+    public RelationalMetricSampleStore(IDbContextFactory<PlatformDbContext> dbFactory)
     {
         _dbFactory = dbFactory;
     }
@@ -73,11 +73,11 @@ public sealed class SqliteMetricSampleStore : IMetricSampleStore
     };
 }
 
-public sealed class SqliteAggregateRollupStore : IAggregateRollupStore
+public sealed class RelationalAggregateRollupStore : IAggregateRollupStore
 {
     private readonly IDbContextFactory<PlatformDbContext> _dbFactory;
 
-    public SqliteAggregateRollupStore(IDbContextFactory<PlatformDbContext> dbFactory)
+    public RelationalAggregateRollupStore(IDbContextFactory<PlatformDbContext> dbFactory)
     {
         _dbFactory = dbFactory;
     }
@@ -149,11 +149,11 @@ public sealed class SqliteAggregateRollupStore : IAggregateRollupStore
     }
 }
 
-public sealed class SqliteServiceCatalog : IServiceCatalog
+public sealed class RelationalServiceCatalog : IServiceCatalog
 {
     private readonly IDbContextFactory<PlatformDbContext> _dbFactory;
 
-    public SqliteServiceCatalog(IDbContextFactory<PlatformDbContext> dbFactory)
+    public RelationalServiceCatalog(IDbContextFactory<PlatformDbContext> dbFactory)
     {
         _dbFactory = dbFactory;
     }
@@ -215,11 +215,11 @@ public sealed class SqliteServiceCatalog : IServiceCatalog
     };
 }
 
-public sealed class SqliteApiKeyStore : IApiKeyStore
+public sealed class RelationalApiKeyStore : IApiKeyStore
 {
     private readonly IDbContextFactory<PlatformDbContext> _dbFactory;
 
-    public SqliteApiKeyStore(IDbContextFactory<PlatformDbContext> dbFactory)
+    public RelationalApiKeyStore(IDbContextFactory<PlatformDbContext> dbFactory)
     {
         _dbFactory = dbFactory;
     }

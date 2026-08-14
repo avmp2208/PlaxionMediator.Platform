@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Platform.Identity;
 using Platform.Storage;
-using Platform.Storage.Sqlite;
+using Platform.Storage.Relational;
 
 namespace Platform.Hosting;
 
@@ -12,7 +12,8 @@ public static class PlatformStorageRegistration
     public const string ConnectionStringName = "Platform";
 
     /// <summary>
-    /// Registers durable SQLite storage outside Development/Testing, and
+    /// Registers durable relational storage (SQLite, MySQL or PostgreSQL,
+    /// selected via "Storage:Provider") outside Development/Testing, and
     /// in-memory storage as the local/test fallback. Also registers
     /// <see cref="ApiKeyService"/>.
     /// </summary>
@@ -21,26 +22,40 @@ public static class PlatformStorageRegistration
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        var useSqlite = !environment.IsDevelopment()
-                        && !environment.IsEnvironment("Testing")
-                        && !string.IsNullOrWhiteSpace(configuration.GetConnectionString(ConnectionStringName));
+        var useDurableStorage = !environment.IsDevelopment()
+                                 && !environment.IsEnvironment("Testing")
+                                 && !string.IsNullOrWhiteSpace(configuration.GetConnectionString(ConnectionStringName));
 
         // Allow explicit override via config even in Development (useful for demos).
         var provider = configuration["Storage:Provider"];
-        if (string.Equals(provider, "Sqlite", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(provider, "InMemory", StringComparison.OrdinalIgnoreCase))
         {
-            useSqlite = true;
+            useDurableStorage = false;
         }
-        else if (string.Equals(provider, "InMemory", StringComparison.OrdinalIgnoreCase))
+        else if (!string.IsNullOrWhiteSpace(provider))
         {
-            useSqlite = false;
+            useDurableStorage = true;
         }
 
-        if (useSqlite)
+        if (useDurableStorage)
         {
             var cs = configuration.GetConnectionString(ConnectionStringName)
                      ?? "Data Source=platform.db";
-            services.AddPlatformSqliteStorage(cs);
+
+            // "Sqlite" is the default durable provider when none is configured explicitly.
+            if (string.Equals(provider, "MySql", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddPlatformMySqlStorage(cs);
+            }
+            else if (string.Equals(provider, "Postgres", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddPlatformPostgresStorage(cs);
+            }
+            else
+            {
+                services.AddPlatformSqliteStorage(cs);
+            }
         }
         else
         {

@@ -5,8 +5,8 @@
 | Project | Type | Status | Responsibility |
 |---|---|---|---|
 | `Platform.Storage` | class library | Done | Provider-neutral canonical models + store interfaces + in-memory implementations. |
-| `Platform.Storage.Sqlite` | class library | Done | EF Core + SQLite reference provider implementing Storage interfaces (EF types stay here). |
-| `Platform.Hosting` | class library | Done | Shared DI helper `AddPlatformStorage` (InMemory vs Sqlite selection). |
+| `Platform.Storage.Relational` | class library | Done | EF Core provider implementing Storage interfaces for SQLite, MySQL and PostgreSQL (EF types stay here). |
+| `Platform.Hosting` | class library | Done | Shared DI helper `AddPlatformStorage` (InMemory vs Sqlite vs MySql vs Postgres selection). |
 | `Platform.Identity` | class library + ASP.NET Core auth | Done | API-key hashing/service + `ApiKeyAuthenticationHandler` (`tenant_id` claim from `X-Api-Key`). |
 | `Platform.Ingestion` | ASP.NET Core Web API | Done | `POST /v1/metrics` (OTLP protobuf), `POST /v1/ingest` (JSON bridge), `/v1/api-keys` admin, `/health`. |
 | `Platform.Aggregation` | class library | Done | `RollupAggregator.Compute` + `AggregationHostedService` (scheduled). |
@@ -23,7 +23,7 @@
                     (size limit 1 MiB; cardinality guards on samples / metric names)
                                         |
                                         v
-              IMetricSampleStore / IServiceCatalog / IApiKeyStore  (InMemory or Sqlite)
+              IMetricSampleStore / IServiceCatalog / IApiKeyStore  (InMemory, Sqlite, MySql or Postgres)
                                         |
                           AggregationHostedService (scheduled, on Platform.Api)
                                         |
@@ -48,7 +48,8 @@
 
 ## Storage selection
 See `docs/storage-decision.md`. Development/Testing → in-memory by default;
-set `Storage:Provider=Sqlite` + shared `ConnectionStrings:Platform` for multi-process durability.
+set `Storage:Provider=Sqlite|MySql|Postgres` + shared `ConnectionStrings:Platform` for multi-process durability.
+This choice is entirely internal to Ingestion/Api — instrumented apps pushing metrics via `/v1/metrics` never see or configure a database provider.
 
 ## Default local ports (launchSettings)
 | App | URL |

@@ -19,7 +19,7 @@ src/Platform.Ingestion/       [Done]        OTLP/HTTP + JSON ingest, API-key adm
 src/Platform.Api/             [Done]        Query API + scheduled aggregation, health
 src/platform-dashboard-web/   [In Progress] Angular Material UI (dark mode) — UI only, mock data
 src/Platform.Storage/         [Done]        Canonical models + store interfaces + in-memory
-src/Platform.Storage.Sqlite/  [Done]        EF Core SQLite reference provider
+src/Platform.Storage.Relational/ [Done]        EF Core storage provider (SQLite, MySQL, PostgreSQL)
 src/Platform.Identity/        [Done]        API-key hashing + auth handler
 src/Platform.Aggregation/     [Done]        Rollup compute + hosted service
 src/Platform.Hosting/         [Done]        Shared storage DI wiring

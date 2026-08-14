@@ -9,7 +9,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
 
 | Component | Status |
 |---|---|
-| `Platform.Storage` / `Platform.Storage.Sqlite` | Done |
+| `Platform.Storage` / `Platform.Storage.Relational` | Done |
 | `Platform.Hosting` | Done |
 | `Platform.Identity` | Done |
 | `Platform.Ingestion` (OTLP + JSON bridge + API-key admin) | Done |
@@ -21,7 +21,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
 
 - Solution bootstrap: `PlaxionMediator.Platform.sln`, `Directory.Build.props`,
   `docs/`, and projects:
-  `src/Platform.Ingestion`, `src/Platform.Storage`, `src/Platform.Storage.Sqlite`,
+  `src/Platform.Ingestion`, `src/Platform.Storage`, `src/Platform.Storage.Relational`,
   `src/Platform.Hosting`, `src/Platform.Identity`, `src/Platform.Aggregation`,
   `src/Platform.Api`, with matching `tests/*.Tests` projects.
 - **Angular Dashboard**: Wired to `Platform.Api` (`/v1/services`, `/v1/services/{id}/metrics`) using Angular 18 functional interceptors for `X-Api-Key` auth. Environment-based configuration supports local, staging, qa, and production. Dark-mode Material theme, login validation, and loading/error handling implemented.
@@ -29,7 +29,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
   (`Tenant`, `Service`, `MetricSample`, `AggregateRollup`, `ApiKey`) and
   interfaces (`IMetricSampleStore`, `IAggregateRollupStore`, `IServiceCatalog`,
   `IApiKeyStore`) plus in-memory implementations for dev/tests. EF Core types
-  live exclusively in `Platform.Storage.Sqlite`.
+  live exclusively in `Platform.Storage.Relational`.
 - **SQLite reference provider**: EF Core + SQLite implementations of all store
   interfaces, schema bootstrap via `EnsureCreated`, DI via
   `AddPlatformSqliteStorage`. Shared provider-conformance suite covers
@@ -76,7 +76,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
   warnings/errors) — the .NET solution no longer includes a Dashboard test
   project:
   - Platform.Storage.Tests: 14
-  - Platform.Storage.Sqlite.Tests: 7
+  - Platform.Storage.Relational.Tests: 7
   - Platform.Ingestion.Tests: 22
   - Platform.Identity.Tests: 6
   - Platform.Aggregation.Tests: 4
