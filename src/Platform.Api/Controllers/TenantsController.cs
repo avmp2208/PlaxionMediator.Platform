@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Platform.Identity;
 
 namespace Platform.Api.Controllers;
@@ -32,6 +33,7 @@ public sealed class TenantsController : ControllerBase
     public sealed record CreateTenantResponse(Guid TenantId, string TenantName, Guid ApiKeyId, string ApiKeyName, string PlaintextKey, DateTimeOffset CreatedAt);
 
     [HttpPost]
+    [EnableRateLimiting(RateLimiterPolicies.TenantBootstrap)]
     public async Task<ActionResult<CreateTenantResponse>> Create([FromBody] CreateTenantRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))

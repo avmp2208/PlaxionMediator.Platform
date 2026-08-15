@@ -1,0 +1,35 @@
+<h2 mat-dialog-title>Enter API key</h2>
+
+<mat-dialog-content>
+  <p class="dialog-copy">
+    We no longer have {{ data.tenantName }}'s API key in this browser tab. Paste the key you
+    saved when it was created to continue.
+  </p>
+
+  <mat-form-field appearance="outline" class="full-width">
+    <mat-label>API key</mat-label>
+    <input
+      matInput
+      name="apiKey"
+      [(ngModel)]="apiKey"
+      placeholder="pk_..."
+      autocomplete="off"
+      [disabled]="loading"
+    />
+  </mat-form-field>
+
+  @if (error) {
+    <p class="error-text">{{ error }}</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancel()" [disabled]="loading">Cancel</button>
+  <button mat-flat-button color="primary" (click)="submit()" [disabled]="loading">
+    @if (loading) {
+      <mat-spinner diameter="20" color="accent"></mat-spinner>
+    } @else {
+      Continue
+    }
+  </button>
+</mat-dialog-actions>

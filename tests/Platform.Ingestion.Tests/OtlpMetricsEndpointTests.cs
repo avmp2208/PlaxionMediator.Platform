@@ -50,6 +50,24 @@ public class OtlpMetricsEndpointTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
+    public async Task Post_MalformedOtlpProtobuf_ReturnsBadRequestNotServerError()
+    {
+        var tenantId = Guid.NewGuid();
+        var (client, _) = await CreateAuthenticatedClientAsync(tenantId);
+
+        // Garbage bytes that are not a valid protobuf-encoded
+        // ExportMetricsServiceRequest - must be rejected cleanly (400), never
+        // surfaced as an unhandled 500.
+        var garbage = new byte[] { 0xFF, 0x00, 0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03 };
+        using var content = new ByteArrayContent(garbage);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/x-protobuf");
+
+        var response = await client.PostAsync("/v1/metrics", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Post_MissingApiKey_ReturnsUnauthorized()
     {
         var client = _factory.CreateClient();

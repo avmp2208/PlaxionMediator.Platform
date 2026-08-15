@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.Features;
 using Platform.Hosting;
 using Platform.Identity;
+using Platform.Ingestion;
 using Platform.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,7 @@ builder.Services.Configure<FormOptions>(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddPlatformStorage(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton<IngestionMetrics>();
 builder.Services
     .AddAuthentication(ApiKeyAuthenticationDefaults.SchemeName)
     .AddScheme<ApiKeyAuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(

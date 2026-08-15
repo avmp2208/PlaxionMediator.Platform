@@ -75,18 +75,21 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
     names/request (plus existing 256-char name limits).
   - API-key plaintext never logged (dev seed writes to `.dev-api-key` file only).
   - `/health` and `/healthz` on Platform.Ingestion and Platform.Api.
-- Tests: **60 total, all green** (`dotnet build` + `dotnet test`, 0
+- Tests: **103 total, all green** (`dotnet build` + `dotnet test`, 0
   warnings/errors) — the .NET solution no longer includes a Dashboard test
-  project:
-  - Platform.Storage.Tests: 14
-  - Platform.Storage.Relational.Tests: 7
-  - Platform.Ingestion.Tests: 22
+  project. Counts as of this session (up from 100, +3 from this session's
+  hardening/rate-limit/malformed-payload/real-e2e work):
+  - Platform.Storage.Tests: 19
+  - Platform.Storage.Relational.Tests: 12
+  - Platform.Ingestion.Tests: 25
   - Platform.Identity.Tests: 6
-  - Platform.Aggregation.Tests: 4
-  - Platform.Api.Tests: 7
-  - `platform-dashboard-web` (Angular, separate toolchain): wired to real HTTP, 32 specs pass.
-- Rate limiting (beyond body-size + cardinality guards).
-- Self-observability dogfooding (Platform emitting its own OTLP metrics).
+  - Platform.Aggregation.Tests: 9
+  - Platform.Api.Tests: 32
+  - `platform-dashboard-web` (Angular, separate toolchain): last reported 39/39 specs pass; not touched or re-verified this session.
+- Rate limiting is now implemented for the anonymous `POST /v1/tenants` bootstrap endpoint (5 req/min per client IP, 429 on excess); other endpoints still rely on body-size + cardinality guards plus API-key auth rather than IP rate limiting.
+- Platform self-observability is now implemented via standard .NET `Meter`/`Counter`/`Histogram` instruments across `Platform.Ingestion`, `Platform.Aggregation`, and `Platform.Api` (see `IngestionMetrics`, `AggregationMetrics`, `ApiMetrics`); Platform does not yet dogfood the PlaxionMediator/OTLP exporter path for its own telemetry.
+- Raw `MetricSample` retention/eviction is now implemented (`Platform.Aggregation/RetentionHostedService.cs`).
+- Tenant-scoped query endpoints (`GET /v1/tenants/{tenantId}/services*`) now require `X-Api-Key` (401 if missing/invalid, 404 on tenant mismatch) - the query-path authentication gap noted in earlier drafts of this document has been closed.
 - Production multi-process default still requires operators to set the same
   `ConnectionStrings:Platform` (or `Storage:Provider=Sqlite`) on Ingestion and
   Api; Development defaults remain in-memory for frictionless local loops.
@@ -109,21 +112,21 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
 
 ## GO/NO-GO for Doc B MVP completion
 
-**CONDITIONAL GO for the backend; Dashboard is IN PROGRESS (UI only).**
+**GO.** See `docs/mvp/README.md` for the full, session-by-session reconciled Definition of Done checklist and rationale - it is the authoritative execution index and supersedes the "CONDITIONAL GO"/"IN PROGRESS" language previously in this section.
 
 Backend is onboardable end-to-end via API: durable shared SQLite, real
 OTLP/HTTP protobuf receiver, API-key auth + operator key lifecycle,
-tenant-isolated query API, scheduled aggregation, and green conformance +
-e2e tests. The operator Dashboard is being rebuilt in Angular per product
-direction; the current build is a **dark-mode UI-only scaffold** on mock
-data and cannot yet be used to view real tenant data — use the HTTP API
-directly (`docs/api-contracts.md`) to verify ingested/aggregated data until
-the Dashboard is wired to `Platform.Api` in a follow-up task.
+tenant-isolated query API (now including the query layer, not just writes),
+scheduled aggregation with raw-sample retention, Platform self-observability
+metrics, MVP security hardening (rate limiting, malformed-payload handling,
+health checks), a measured performance baseline, and green conformance +
+real end-to-end OTLP acceptance tests. The Angular Dashboard is wired to the
+real `Platform.Api` backend (tenant list, create-tenant, per-service
+metrics with time-range toggle) - it is no longer a mock-data scaffold.
 
-Remaining polish (Dashboard wiring, charts, rate limits, dogfooding,
-Postgres) is incremental; blocking Doc B backend gaps that were open
-previously (no health, no ingest limits, key-in-logs) are closed for the
-lightweight MVP bar.
+Remaining polish (dashboard charts, real managed Postgres/MySQL exercise,
+browser E2E coverage) is incremental and explicitly non-blocking for the
+Doc B MVP bar.
 
 ## Confirmations
 

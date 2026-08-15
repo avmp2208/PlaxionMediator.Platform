@@ -1,18 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Platform.Identity;
 using Platform.Storage;
 
 namespace Platform.Api.Controllers;
 
-// NOTE: authentication intentionally removed for the Dashboard "Manage" flow -
-// the tenant registry created via POST /v1/tenants is browser-local, and a
-// tenant only ever "manages" the tenant it just created/knows the id for.
-// Requiring the API key here just to view the service list added friction
-// without real protection at this MVP stage (the plaintext key is only ever
-// shown once, so re-prompting for it on every "Manage" click was not viable).
-// TenantId is therefore trusted directly from the route. Real access control
-// (e.g. RBAC or a session-based mechanism) will be revisited as separate
-// hardening work, out of scope for now.
+// The {tenantId} route segment is NEVER trusted on its own - it must match
+// the TenantId resolved from the authenticated X-Api-Key. A mismatch
+// resolves to 404 (not 403) to avoid confirming the existence of another
+// tenant's id. No API key at all resolves to 401 via [Authorize].
 [ApiController]
+[Authorize(AuthenticationSchemes = ApiKeyAuthenticationDefaults.SchemeName)]
 [Route("v1/tenants/{tenantId:guid}/services")]
 public sealed class ServicesController : ControllerBase
 {
@@ -26,7 +24,13 @@ public sealed class ServicesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ServiceResponse>>> GetServices(Guid tenantId, CancellationToken cancellationToken)
     {
-        var services = await _serviceCatalog.ListByTenantAsync(tenantId, cancellationToken);
+        if (!User.TryGetTenantId(out var authenticatedTenantId) || authenticatedTenantId != tenantId)
+        {
+            // Do not leak whether another tenant's id exists.
+            return NotFound();
+        }
+
+        var services = await _serviceCatalog.ListByTenantAsync(authenticatedTenantId, cancellationToken);
         var response = services.Select(s => new ServiceResponse(s.Id, s.Name, s.Environment)).ToList();
         return Ok(response);
     }

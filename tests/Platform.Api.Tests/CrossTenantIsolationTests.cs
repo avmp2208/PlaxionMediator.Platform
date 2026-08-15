@@ -22,7 +22,7 @@ public class CrossTenantIsolationTests : IClassFixture<WebApplicationFactory<Pro
         _factory = factory;
     }
 
-    private async Task<(HttpClient Client, Guid TenantId, Service Service)> SeedTenantWithServiceAsync(string serviceName)
+    private async Task<(HttpClient Client, Guid TenantId, Service Service, string ApiKey)> SeedTenantWithServiceAsync(string serviceName)
     {
         using var scope = _factory.Services.CreateScope();
         var apiKeyService = scope.ServiceProvider.GetRequiredService<ApiKeyService>();
@@ -56,14 +56,26 @@ public class CrossTenantIsolationTests : IClassFixture<WebApplicationFactory<Pro
         });
 
         var client = _factory.CreateClient();
-        return (client, tenantId, service);
+        client.DefaultRequestHeaders.Add(ApiKeyAuthenticationDefaults.HeaderName, created.PlaintextKey);
+        return (client, tenantId, service, created.PlaintextKey);
+    }
+
+    [Fact]
+    public async Task GetServices_NoApiKey_Returns401()
+    {
+        var (_, tenantA, _, _) = await SeedTenantWithServiceAsync("service-no-key");
+        var anonymousClient = _factory.CreateClient();
+
+        var response = await anonymousClient.GetAsync($"/v1/tenants/{tenantA}/services");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
     public async Task GetServices_OnlyReturnsOwnTenantServices()
     {
-        var (clientA, tenantA, serviceA) = await SeedTenantWithServiceAsync("service-a");
-        var (clientB, tenantB, _) = await SeedTenantWithServiceAsync("service-b");
+        var (clientA, tenantA, serviceA, _) = await SeedTenantWithServiceAsync("service-a");
+        var (clientB, tenantB, _, _) = await SeedTenantWithServiceAsync("service-b");
 
         var responseA = await clientA.GetFromJsonAsync<List<ServiceResponse>>($"/v1/tenants/{tenantA}/services");
         var responseB = await clientB.GetFromJsonAsync<List<ServiceResponse>>($"/v1/tenants/{tenantB}/services");
@@ -74,10 +86,23 @@ public class CrossTenantIsolationTests : IClassFixture<WebApplicationFactory<Pro
     }
 
     [Fact]
+    public async Task GetServices_TenantA_KeyCannotReadTenantB_ServicesEvenWithTenantBIdInUrl()
+    {
+        var (clientA, _, _, _) = await SeedTenantWithServiceAsync("service-a-cross");
+        var (_, tenantB, _, _) = await SeedTenantWithServiceAsync("service-b-cross");
+
+        // Tenant A's API key used against Tenant B's real TenantId in the
+        // URL must resolve to "not found", never to Tenant B's data.
+        var response = await clientA.GetAsync($"/v1/tenants/{tenantB}/services");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task GetMetrics_TenantB_CannotAccessTenantAService()
     {
-        var (_, _, serviceA) = await SeedTenantWithServiceAsync("service-a-metrics");
-        var (clientB, tenantB, _) = await SeedTenantWithServiceAsync("service-b-metrics");
+        var (_, _, serviceA, _) = await SeedTenantWithServiceAsync("service-a-metrics");
+        var (clientB, tenantB, _, _) = await SeedTenantWithServiceAsync("service-b-metrics");
 
         // Tenant B requesting a service id that does not belong to its own
         // tenant (even under its own tenantId) must resolve to "not found".
@@ -87,9 +112,23 @@ public class CrossTenantIsolationTests : IClassFixture<WebApplicationFactory<Pro
     }
 
     [Fact]
+    public async Task GetMetrics_TenantA_KeyCannotReadTenantB_MetricsEvenWithTenantBIdInUrl()
+    {
+        var (clientA, _, serviceAOwn, _) = await SeedTenantWithServiceAsync("service-a-metrics-cross");
+        var (_, tenantB, serviceB, _) = await SeedTenantWithServiceAsync("service-b-metrics-cross");
+
+        // Tenant A's API key against Tenant B's real TenantId + service id
+        // must resolve to "not found", never leaking Tenant B's metrics.
+        var response = await clientA.GetAsync($"/v1/tenants/{tenantB}/services/{serviceB.Id}/metrics?range=1h");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        _ = serviceAOwn;
+    }
+
+    [Fact]
     public async Task GetMetrics_TenantA_CanAccessOwnService()
     {
-        var (clientA, tenantA, serviceA) = await SeedTenantWithServiceAsync("service-a-own-metrics");
+        var (clientA, tenantA, serviceA, _) = await SeedTenantWithServiceAsync("service-a-own-metrics");
 
         var response = await clientA.GetAsync($"/v1/tenants/{tenantA}/services/{serviceA.Id}/metrics?range=1h");
         response.EnsureSuccessStatusCode();

@@ -19,6 +19,7 @@ public sealed class AggregationHostedService : BackgroundService
     private readonly ILogger<AggregationHostedService> _logger;
     private readonly TimeSpan _interval;
     private readonly TimeSpan _bucketSize;
+    private readonly AggregationMetrics _metrics;
 
     public AggregationHostedService(
         IMetricSampleStore sampleStore,
@@ -26,7 +27,8 @@ public sealed class AggregationHostedService : BackgroundService
         IServiceCatalog serviceCatalog,
         ILogger<AggregationHostedService> logger,
         TimeSpan? interval = null,
-        TimeSpan? bucketSize = null)
+        TimeSpan? bucketSize = null,
+        AggregationMetrics? metrics = null)
     {
         _sampleStore = sampleStore;
         _rollupStore = rollupStore;
@@ -34,6 +36,7 @@ public sealed class AggregationHostedService : BackgroundService
         _logger = logger;
         _interval = interval ?? TimeSpan.FromMinutes(1);
         _bucketSize = bucketSize ?? TimeSpan.FromMinutes(1);
+        _metrics = metrics ?? new AggregationMetrics();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -60,18 +63,35 @@ public sealed class AggregationHostedService : BackgroundService
     public async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         var startedAt = DateTimeOffset.UtcNow;
-        var samples = await _sampleStore.GetAllAsync(cancellationToken);
-        var rollups = RollupAggregator.Compute(samples, _bucketSize);
-
-        foreach (var rollup in rollups)
+        try
         {
-            await _serviceCatalog.GetOrCreateAsync(rollup.TenantId, rollup.ServiceName, rollup.Environment, cancellationToken);
-        }
+            var samples = await _sampleStore.GetAllAsync(cancellationToken);
+            var rollups = RollupAggregator.Compute(samples, _bucketSize);
 
-        await _rollupStore.AddRangeAsync(rollups, cancellationToken);
-        _logger.LogInformation(
-            "Aggregation run produced {Count} rollups in {DurationMs}ms.",
-            rollups.Count,
-            (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+            foreach (var rollup in rollups)
+            {
+                await _serviceCatalog.GetOrCreateAsync(rollup.TenantId, rollup.ServiceName, rollup.Environment, cancellationToken);
+            }
+
+            await _rollupStore.AddRangeAsync(rollups, cancellationToken);
+            _logger.LogInformation(
+                "Aggregation run produced {Count} rollups in {DurationMs}ms.",
+                rollups.Count,
+                (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+        }
+        catch (Exception) when (RecordFailure())
+        {
+            throw;
+        }
+        finally
+        {
+            _metrics.JobDurationMs.Record((DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+        }
+    }
+
+    private bool RecordFailure()
+    {
+        _metrics.Failures.Add(1);
+        return true;
     }
 }

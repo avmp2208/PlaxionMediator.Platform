@@ -19,11 +19,13 @@ public sealed class OtlpMetricsController : ControllerBase
 {
     private readonly IMetricSampleStore _store;
     private readonly IServiceCatalog _serviceCatalog;
+    private readonly IngestionMetrics _metrics;
 
-    public OtlpMetricsController(IMetricSampleStore store, IServiceCatalog serviceCatalog)
+    public OtlpMetricsController(IMetricSampleStore store, IServiceCatalog serviceCatalog, IngestionMetrics metrics)
     {
         _store = store;
         _serviceCatalog = serviceCatalog;
+        _metrics = metrics;
     }
 
     [HttpPost]
@@ -32,55 +34,71 @@ public sealed class OtlpMetricsController : ControllerBase
     // (application/x-protobuf, application/protobuf, optional charset).
     public async Task<IActionResult> Post(CancellationToken cancellationToken)
     {
-        var tenantId = User.GetTenantId();
-
-        using var raw = new MemoryStream();
-        await Request.Body.CopyToAsync(raw, cancellationToken);
-        raw.Position = 0;
-
-        ExportMetricsServiceRequest request;
+        var startedAt = DateTimeOffset.UtcNow;
         try
         {
-            var encoding = Request.Headers.ContentEncoding.ToString();
-            if (encoding.Contains("gzip", StringComparison.OrdinalIgnoreCase))
+            var tenantId = User.GetTenantId();
+
+            using var raw = new MemoryStream();
+            await Request.Body.CopyToAsync(raw, cancellationToken);
+            raw.Position = 0;
+
+            ExportMetricsServiceRequest request;
+            try
             {
-                await using var gzip = new GZipStream(raw, CompressionMode.Decompress, leaveOpen: true);
-                request = ExportMetricsServiceRequest.Parser.ParseFrom(gzip);
+                var encoding = Request.Headers.ContentEncoding.ToString();
+                if (encoding.Contains("gzip", StringComparison.OrdinalIgnoreCase))
+                {
+                    await using var gzip = new GZipStream(raw, CompressionMode.Decompress, leaveOpen: true);
+                    request = ExportMetricsServiceRequest.Parser.ParseFrom(gzip);
+                }
+                else
+                {
+                    request = ExportMetricsServiceRequest.Parser.ParseFrom(raw);
+                }
             }
-            else
+            catch (InvalidProtocolBufferException)
             {
-                request = ExportMetricsServiceRequest.Parser.ParseFrom(raw);
+                _metrics.RejectedTelemetry.Add(1);
+                _metrics.IngestRequests.Add(1, new KeyValuePair<string, object?>("outcome", "failure"));
+                return BadRequest(new { error = "Invalid OTLP protobuf payload." });
             }
-        }
-        catch (InvalidProtocolBufferException)
-        {
-            return BadRequest(new { error = "Invalid OTLP protobuf payload." });
-        }
-        catch (InvalidDataException)
-        {
-            return BadRequest(new { error = "Invalid gzip content-encoding on OTLP payload." });
-        }
+            catch (InvalidDataException)
+            {
+                _metrics.RejectedTelemetry.Add(1);
+                _metrics.IngestRequests.Add(1, new KeyValuePair<string, object?>("outcome", "failure"));
+                return BadRequest(new { error = "Invalid gzip content-encoding on OTLP payload." });
+            }
 
-        IReadOnlyList<MetricSample> samples;
-        try
-        {
-            samples = OtlpMetricsMapper.Map(request, tenantId);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+            IReadOnlyList<MetricSample> samples;
+            try
+            {
+                samples = OtlpMetricsMapper.Map(request, tenantId);
+            }
+            catch (ArgumentException ex)
+            {
+                _metrics.RejectedTelemetry.Add(1);
+                _metrics.IngestRequests.Add(1, new KeyValuePair<string, object?>("outcome", "failure"));
+                return BadRequest(new { error = ex.Message });
+            }
 
-        foreach (var sample in samples)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await _store.AddAsync(sample, cancellationToken);
-            await _serviceCatalog.GetOrCreateAsync(sample.TenantId, sample.ServiceName, sample.Environment, cancellationToken);
-        }
+            foreach (var sample in samples)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await _store.AddAsync(sample, cancellationToken);
+                await _serviceCatalog.GetOrCreateAsync(sample.TenantId, sample.ServiceName, sample.Environment, cancellationToken);
+            }
 
-        // OTLP/HTTP full success: 200 OK with ExportMetricsServiceResponse body.
-        var response = new ExportMetricsServiceResponse();
-        var bytes = response.ToByteArray();
-        return File(bytes, "application/x-protobuf");
+            _metrics.IngestRequests.Add(1, new KeyValuePair<string, object?>("outcome", "success"));
+
+            // OTLP/HTTP full success: 200 OK with ExportMetricsServiceResponse body.
+            var response = new ExportMetricsServiceResponse();
+            var bytes = response.ToByteArray();
+            return File(bytes, "application/x-protobuf");
+        }
+        finally
+        {
+            _metrics.IngestLatencyMs.Record((DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+        }
     }
 }

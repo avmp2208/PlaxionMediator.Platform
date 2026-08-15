@@ -35,12 +35,15 @@ public class TenantsEndpointTests : IClassFixture<WebApplicationFactory<Program>
         Assert.False(string.IsNullOrWhiteSpace(created.PlaintextKey));
         Assert.StartsWith("pk_", created.PlaintextKey);
 
-        // The tenant's service list is reachable directly by TenantId (no key required).
+        // Without the API key, the tenant's own service list is not reachable.
+        var unauthenticatedResponse = await client.GetAsync($"/v1/tenants/{created.TenantId}/services");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthenticatedResponse.StatusCode);
+
+        // The returned key works against key-protected endpoints (e.g. api-key management and services).
+        client.DefaultRequestHeaders.Add(ApiKeyAuthenticationDefaults.HeaderName, created.PlaintextKey);
+
         var servicesResponse = await client.GetAsync($"/v1/tenants/{created.TenantId}/services");
         Assert.Equal(HttpStatusCode.OK, servicesResponse.StatusCode);
-
-        // The returned key still works against key-protected endpoints (e.g. api-key management).
-        client.DefaultRequestHeaders.Add(ApiKeyAuthenticationDefaults.HeaderName, created.PlaintextKey);
 
         var apiKeysResponse = await client.GetAsync("/v1/api-keys");
         Assert.Equal(HttpStatusCode.OK, apiKeysResponse.StatusCode);

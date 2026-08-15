@@ -22,4 +22,16 @@ public interface IMetricSampleStore
     /// scheduled job) - never exposed through Platform.Api.
     /// </summary>
     Task<IReadOnlyList<MetricSample>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes every raw MetricSample with <see cref="MetricSample.Timestamp"/>
+    /// strictly older than <paramref name="threshold"/>, across all tenants.
+    /// Restricted to trusted, system-internal callers only (e.g. the
+    /// Platform.Aggregation scheduled retention job) - never exposed through
+    /// Platform.Api. Mirrors the trust boundary already established by
+    /// <see cref="GetAllAsync"/>: rollups already computed from these samples
+    /// (AggregateRollup rows) are untouched, and tenant boundaries are
+    /// preserved because deletion is scoped purely by timestamp.
+    /// </summary>
+    Task DeleteOlderThanAsync(DateTimeOffset threshold, CancellationToken cancellationToken = default);
 }

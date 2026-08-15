@@ -5,60 +5,123 @@ namespace Platform.Storage.Relational;
 public sealed class RelationalMetricSampleStore : IMetricSampleStore
 {
     private readonly IDbContextFactory<PlatformDbContext> _dbFactory;
+    private readonly StorageMetrics _metrics;
 
-    public RelationalMetricSampleStore(IDbContextFactory<PlatformDbContext> dbFactory)
+    public RelationalMetricSampleStore(IDbContextFactory<PlatformDbContext> dbFactory, StorageMetrics? metrics = null)
     {
         _dbFactory = dbFactory;
+        _metrics = metrics ?? new StorageMetrics();
     }
 
     public async Task AddAsync(MetricSample sample, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        db.MetricSamples.Add(new MetricSampleEntity
+        await MeasureAsync(async () =>
         {
-            Id = sample.Id,
-            TenantId = sample.TenantId,
-            ServiceName = sample.ServiceName,
-            Environment = sample.Environment,
-            MetricName = sample.MetricName,
-            Value = sample.Value,
-            TimestampUtc = TimeMapping.ToUtcDateTime(sample.Timestamp)
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            db.MetricSamples.Add(new MetricSampleEntity
+            {
+                Id = sample.Id,
+                TenantId = sample.TenantId,
+                ServiceName = sample.ServiceName,
+                Environment = sample.Environment,
+                MetricName = sample.MetricName,
+                Value = sample.Value,
+                TimestampUtc = TimeMapping.ToUtcDateTime(sample.Timestamp)
+            });
+            await db.SaveChangesAsync(cancellationToken);
         });
-        await db.SaveChangesAsync(cancellationToken);
     }
 
     public Task<IReadOnlyList<MetricSample>> GetByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
         QueryAsync(tenantId, from: null, to: null, cancellationToken);
 
-    public async Task<IReadOnlyList<MetricSample>> QueryAsync(
+    public Task<IReadOnlyList<MetricSample>> QueryAsync(
         Guid tenantId,
         DateTimeOffset? from = null,
         DateTimeOffset? to = null,
         CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        var query = db.MetricSamples.AsNoTracking().Where(s => s.TenantId == tenantId);
-        if (from is not null)
+        return MeasureAsync(async () =>
         {
-            var fromUtc = TimeMapping.ToUtcDateTime(from.Value);
-            query = query.Where(s => s.TimestampUtc >= fromUtc);
-        }
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            var query = db.MetricSamples.AsNoTracking().Where(s => s.TenantId == tenantId);
+            if (from is not null)
+            {
+                var fromUtc = TimeMapping.ToUtcDateTime(from.Value);
+                query = query.Where(s => s.TimestampUtc >= fromUtc);
+            }
 
-        if (to is not null)
-        {
-            var toUtc = TimeMapping.ToUtcDateTime(to.Value);
-            query = query.Where(s => s.TimestampUtc <= toUtc);
-        }
+            if (to is not null)
+            {
+                var toUtc = TimeMapping.ToUtcDateTime(to.Value);
+                query = query.Where(s => s.TimestampUtc <= toUtc);
+            }
 
-        var rows = await query.OrderBy(s => s.TimestampUtc).ToListAsync(cancellationToken);
-        return rows.Select(Map).ToList();
+            var rows = await query.OrderBy(s => s.TimestampUtc).ToListAsync(cancellationToken);
+            return (IReadOnlyList<MetricSample>)rows.Select(Map).ToList();
+        });
     }
 
-    public async Task<IReadOnlyList<MetricSample>> GetAllAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<MetricSample>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        var rows = await db.MetricSamples.AsNoTracking().ToListAsync(cancellationToken);
-        return rows.Select(Map).ToList();
+        return MeasureAsync(async () =>
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            var rows = await db.MetricSamples.AsNoTracking().ToListAsync(cancellationToken);
+            return (IReadOnlyList<MetricSample>)rows.Select(Map).ToList();
+        });
+    }
+
+    public async Task DeleteOlderThanAsync(DateTimeOffset threshold, CancellationToken cancellationToken = default)
+    {
+        await MeasureAsync(async () =>
+        {
+            var thresholdUtc = TimeMapping.ToUtcDateTime(threshold);
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+            // Server-side bulk delete: only rows strictly older than the threshold
+            // are touched, so AggregateRollup rows (a separate table) and samples
+            // from any tenant newer than the threshold are never affected.
+            await db.MetricSamples
+                .Where(s => s.TimestampUtc < thresholdUtc)
+                .ExecuteDeleteAsync(cancellationToken);
+        });
+    }
+
+    private async Task MeasureAsync(Func<Task> operation)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        try
+        {
+            await operation();
+        }
+        catch
+        {
+            _metrics.Failures.Add(1);
+            throw;
+        }
+        finally
+        {
+            _metrics.OperationLatencyMs.Record((DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+        }
+    }
+
+    private async Task<T> MeasureAsync<T>(Func<Task<T>> operation)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        try
+        {
+            return await operation();
+        }
+        catch
+        {
+            _metrics.Failures.Add(1);
+            throw;
+        }
+        finally
+        {
+            _metrics.OperationLatencyMs.Record((DateTimeOffset.UtcNow - startedAt).TotalMilliseconds);
+        }
     }
 
     private static MetricSample Map(MetricSampleEntity e) => new()

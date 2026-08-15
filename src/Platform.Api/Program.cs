@@ -1,4 +1,7 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Platform.Aggregation;
+using Platform.Api;
 using Platform.Hosting;
 using Platform.Identity;
 using Platform.Storage;
@@ -8,8 +11,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddPlatformStorage(builder.Configuration, builder.Environment);
+
+builder.Services.Configure<RetentionOptions>(builder.Configuration.GetSection("Retention"));
+builder.Services.AddSingleton<AggregationMetrics>();
+builder.Services.AddSingleton<ApiMetrics>();
 builder.Services.AddHostedService(sp =>
     ActivatorUtilities.CreateInstance<AggregationHostedService>(sp));
+// Runs after aggregation - each pass reads/aggregates ALL currently
+// available raw samples before any of them ever become old enough to be
+// evicted by this job, so rollups never depend on samples this job deletes.
+builder.Services.AddHostedService(sp =>
+    ActivatorUtilities.CreateInstance<RetentionHostedService>(sp));
 
 builder.Services
     .AddAuthentication(ApiKeyAuthenticationDefaults.SchemeName)
@@ -17,6 +29,24 @@ builder.Services
         ApiKeyAuthenticationDefaults.SchemeName, _ => { });
 builder.Services.AddAuthorization();
 builder.Services.AddHealthChecks();
+
+// Anti-abuse control for the anonymous POST /v1/tenants bootstrap endpoint:
+// there is no API key yet at that point, so the only practical throttle is
+// per-client-IP. 5 requests/minute is generous for legitimate self-service
+// signup while limiting automated abuse. Exceeding the limit returns 429.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(RateLimiterPolicies.TenantBootstrap, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 
 // var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 // if (allowedOrigins.Length == 0 && builder.Environment.IsDevelopment())
@@ -92,6 +122,7 @@ app.UseAuthorization();
 // CORS rules configured above were silently never applied, no matter what
 // origins/ports were listed. The policy name must be passed explicitly.
 app.UseCors("Angular");
+app.UseRateLimiter();
 
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/healthz");

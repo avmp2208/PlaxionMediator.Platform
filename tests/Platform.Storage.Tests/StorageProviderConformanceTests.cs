@@ -199,6 +199,116 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
+    [Fact]
+    public async Task DeleteOlderThanAsync_RemovesExpired_KeepsNonExpired()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantId = Guid.NewGuid();
+            var now = DateTimeOffset.UtcNow;
+            var expired = NewSample(tenantId, "svc", "prod", "cpu", 1, now - TimeSpan.FromDays(10));
+            var fresh = NewSample(tenantId, "svc", "prod", "cpu", 2, now);
+
+            await handles.Samples.AddAsync(expired);
+            await handles.Samples.AddAsync(fresh);
+
+            await handles.Samples.DeleteOlderThanAsync(now - TimeSpan.FromDays(7));
+
+            var remaining = await handles.Samples.GetByTenantAsync(tenantId);
+            var single = Assert.Single(remaining);
+            Assert.Equal(fresh.Id, single.Id);
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteOlderThanAsync_PreservesTenantIsolation()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantA = Guid.NewGuid();
+            var tenantB = Guid.NewGuid();
+            var now = DateTimeOffset.UtcNow;
+            var oldTimestamp = now - TimeSpan.FromDays(30);
+
+            // Tenant B's expired sample must never be affected by evicting
+            // tenant A's data - deletion is scoped purely by timestamp, so
+            // both old rows (from any tenant) are removed by design, while
+            // a still-fresh tenant B row must survive regardless of tenant.
+            await handles.Samples.AddAsync(NewSample(tenantA, "svc-a", "prod", "cpu", 1, oldTimestamp));
+            var tenantBOld = NewSample(tenantB, "svc-b", "prod", "cpu", 2, oldTimestamp);
+            await handles.Samples.AddAsync(tenantBOld);
+            var tenantBFresh = NewSample(tenantB, "svc-b", "prod", "cpu", 3, now);
+            await handles.Samples.AddAsync(tenantBFresh);
+
+            await handles.Samples.DeleteOlderThanAsync(now - TimeSpan.FromDays(7));
+
+            var tenantAResults = await handles.Samples.GetByTenantAsync(tenantA);
+            var tenantBResults = await handles.Samples.GetByTenantAsync(tenantB);
+
+            Assert.Empty(tenantAResults);
+            var single = Assert.Single(tenantBResults);
+            Assert.Equal(tenantBFresh.Id, single.Id);
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteOlderThanAsync_DoesNotAffectAggregateRollups()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantId = Guid.NewGuid();
+            var serviceId = ServiceIdGenerator.Compute(tenantId, "checkout", "prod");
+            var now = DateTimeOffset.UtcNow;
+            var oldTimestamp = now - TimeSpan.FromDays(30);
+
+            await handles.Samples.AddAsync(NewSample(tenantId, "checkout", "prod", "latency", 1, oldTimestamp));
+
+            await handles.Rollups.AddRangeAsync(new[]
+            {
+                new AggregateRollup
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    ServiceName = "checkout",
+                    Environment = "prod",
+                    MetricName = "latency",
+                    BucketStart = oldTimestamp,
+                    BucketEnd = oldTimestamp.AddMinutes(1),
+                    Count = 1,
+                    Min = 1,
+                    Max = 1,
+                    Avg = 1,
+                    P50 = 1,
+                    P95 = 1,
+                    P99 = 1
+                }
+            });
+
+            await handles.Samples.DeleteOlderThanAsync(now - TimeSpan.FromDays(7));
+
+            // Raw sample gone...
+            Assert.Empty(await handles.Samples.GetByTenantAsync(tenantId));
+            // ...but the rollup computed from it must survive untouched.
+            Assert.Single(await handles.Rollups.QueryAsync(
+                tenantId, serviceId, oldTimestamp.AddMinutes(-1), oldTimestamp.AddMinutes(2)));
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
     private static MetricSample NewSample(
         Guid tenantId,
         string service,

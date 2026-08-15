@@ -11,6 +11,7 @@ public static class StorageServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddPlatformInMemoryStorage(this IServiceCollection services)
     {
+        services.AddSingleton<StorageMetrics>();
         services.AddSingleton<IMetricSampleStore, InMemoryMetricSampleStore>();
         services.AddSingleton<IAggregateRollupStore, InMemoryAggregateRollupStore>();
         services.AddSingleton<IServiceCatalog, InMemoryServiceCatalog>();

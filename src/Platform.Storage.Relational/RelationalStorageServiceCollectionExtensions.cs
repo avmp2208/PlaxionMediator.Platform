@@ -64,6 +64,7 @@ public static class RelationalStorageServiceCollectionExtensions
 
     private static IServiceCollection AddPlatformRelationalStores(this IServiceCollection services)
     {
+        services.AddSingleton<StorageMetrics>();
         services.AddSingleton<IMetricSampleStore, RelationalMetricSampleStore>();
         services.AddSingleton<IAggregateRollupStore, RelationalAggregateRollupStore>();
         services.AddSingleton<IServiceCatalog, RelationalServiceCatalog>();

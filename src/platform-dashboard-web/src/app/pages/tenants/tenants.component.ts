@@ -8,8 +8,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TenantRegistryService } from '../../core/tenant-registry.service';
+import { TenantSessionService } from '../../core/tenant-session.service';
 import { TenantRegistryEntry } from '../../core/models';
 import { CreateTenantDialogComponent } from './create-tenant-dialog/create-tenant-dialog.component';
+import { RebindKeyDialogComponent } from './rebind-key-dialog/rebind-key-dialog.component';
 
 @Component({
   selector: 'app-tenants',
@@ -31,6 +33,7 @@ export class TenantsComponent {
 
   constructor(
     readonly registry: TenantRegistryService,
+    private readonly session: TenantSessionService,
     private readonly dialog: MatDialog,
     private readonly router: Router
   ) {}
@@ -54,13 +57,38 @@ export class TenantsComponent {
         maskedKey: TenantRegistryService.mask(result.plaintextKey),
         createdAt: result.createdAt
       });
+
+      // The plaintext key is already in-memory from the create response for
+      // this browser tab - activate it as the session key immediately so
+      // "Manage" can navigate straight through without re-prompting.
+      this.session.signIn(result.tenantId, result.plaintextKey);
     });
   }
 
   manage(tenant: TenantRegistryEntry): void {
-    // Viewing a tenant's services only requires its TenantId (see
-    // ServicesController in Platform.Api) - no API key/authentication is
-    // needed at this MVP stage, so "Manage" navigates straight through.
-    this.router.navigate(['/tenants', tenant.tenantId, 'services']);
+    // Services/metrics are gated server-side by [Authorize] +
+    // TenantId-from-key validation (see ServicesController/
+    // ServiceMetricsController in Platform.Api). If the active session key
+    // already belongs to this tenant (e.g. it was just created in this
+    // tab), navigate straight through. Otherwise (e.g. the tenant was
+    // created in a previous session/tab and its plaintext key is no longer
+    // in memory), prompt for the key before navigating.
+    if (this.session.isActiveTenant(tenant.tenantId)) {
+      this.router.navigate(['/tenants', tenant.tenantId, 'services']);
+      return;
+    }
+
+    const dialogRef = this.dialog.open(RebindKeyDialogComponent, {
+      width: '480px',
+      data: { tenantId: tenant.tenantId, tenantName: tenant.tenantName }
+    });
+
+    dialogRef.afterClosed().subscribe((apiKey) => {
+      if (!apiKey) {
+        return;
+      }
+
+      this.router.navigate(['/tenants', tenant.tenantId, 'services']);
+    });
   }
 }

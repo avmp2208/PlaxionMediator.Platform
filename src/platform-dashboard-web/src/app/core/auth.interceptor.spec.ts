@@ -38,7 +38,7 @@ describe('authInterceptor', () => {
   });
 
   it('should attach the X-Api-Key header once a session key is set', () => {
-    session.signIn('pk_abcd1234');
+    session.signIn('t1', 'pk_abcd1234');
 
     http.get(`${environment.apiBaseUrl}/v1/services`).subscribe();
 

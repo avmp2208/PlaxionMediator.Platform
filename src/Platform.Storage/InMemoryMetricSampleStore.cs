@@ -9,12 +9,15 @@ namespace Platform.Storage;
 /// </summary>
 public sealed class InMemoryMetricSampleStore : IMetricSampleStore
 {
-    private readonly ConcurrentBag<MetricSample> _samples = new();
+    // Keyed by sample Id (rather than a ConcurrentBag) so retention eviction
+    // (DeleteOlderThanAsync) can remove individual entries without rebuilding
+    // the whole collection under a lock.
+    private readonly ConcurrentDictionary<Guid, MetricSample> _samples = new();
 
     public Task AddAsync(MetricSample sample, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _samples.Add(sample);
+        _samples[sample.Id] = sample;
         return Task.CompletedTask;
     }
 
@@ -28,7 +31,7 @@ public sealed class InMemoryMetricSampleStore : IMetricSampleStore
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        IEnumerable<MetricSample> query = _samples.Where(s => s.TenantId == tenantId);
+        IEnumerable<MetricSample> query = _samples.Values.Where(s => s.TenantId == tenantId);
         if (from is not null)
         {
             query = query.Where(s => s.Timestamp >= from.Value);
@@ -46,7 +49,21 @@ public sealed class InMemoryMetricSampleStore : IMetricSampleStore
     public Task<IReadOnlyList<MetricSample>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        IReadOnlyList<MetricSample> result = _samples.ToList();
+        IReadOnlyList<MetricSample> result = _samples.Values.ToList();
         return Task.FromResult(result);
+    }
+
+    public Task DeleteOlderThanAsync(DateTimeOffset threshold, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        foreach (var sample in _samples.Values)
+        {
+            if (sample.Timestamp < threshold)
+            {
+                _samples.TryRemove(sample.Id, out _);
+            }
+        }
+
+        return Task.CompletedTask;
     }
 }
