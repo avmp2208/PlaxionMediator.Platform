@@ -34,7 +34,7 @@ This is fully agnostic to the services (e.g. OTLP producers) that push data into
 
 In-memory remains the default for Development and Testing environments.
 
-Registration (`Platform.Hosting.AddPlatformStorage`) reads `Storage:Provider` + `ConnectionStrings:Platform`:
+Registration (`Platform.Hosting.AddPlatformStorage`) reads `Storage:Provider` + `ConnectionStrings:Platform`. The provider string is parsed (case-insensitively) into the `Platform.Storage.RelationalProvider` enum (`Sqlite`/`MySql`/`PostgreSql`, with `Postgres` accepted as an alias for `PostgreSql`) via `PlatformStorageRegistration.ParseRelationalProvider`, and a `switch` on that enum selects the concrete registration call:
 - `Sqlite` (default durable choice) → `AddPlatformSqliteStorage`.
 - `MySql` → `AddPlatformMySqlStorage` (MySql.EntityFrameworkCore).
 - `Postgres` (or `PostgreSql`) → `AddPlatformPostgresStorage` (Npgsql.EntityFrameworkCore.PostgreSQL).

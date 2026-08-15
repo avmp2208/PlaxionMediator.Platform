@@ -56,18 +56,17 @@ public class CrossTenantIsolationTests : IClassFixture<WebApplicationFactory<Pro
         });
 
         var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Add(ApiKeyAuthenticationDefaults.HeaderName, created.PlaintextKey);
         return (client, tenantId, service);
     }
 
     [Fact]
     public async Task GetServices_OnlyReturnsOwnTenantServices()
     {
-        var (clientA, _, serviceA) = await SeedTenantWithServiceAsync("service-a");
-        var (clientB, _, _) = await SeedTenantWithServiceAsync("service-b");
+        var (clientA, tenantA, serviceA) = await SeedTenantWithServiceAsync("service-a");
+        var (clientB, tenantB, _) = await SeedTenantWithServiceAsync("service-b");
 
-        var responseA = await clientA.GetFromJsonAsync<List<ServiceResponse>>("/v1/services");
-        var responseB = await clientB.GetFromJsonAsync<List<ServiceResponse>>("/v1/services");
+        var responseA = await clientA.GetFromJsonAsync<List<ServiceResponse>>($"/v1/tenants/{tenantA}/services");
+        var responseB = await clientB.GetFromJsonAsync<List<ServiceResponse>>($"/v1/tenants/{tenantB}/services");
 
         Assert.Single(responseA!);
         Assert.Equal(serviceA.Id, responseA![0].Id);
@@ -78,9 +77,11 @@ public class CrossTenantIsolationTests : IClassFixture<WebApplicationFactory<Pro
     public async Task GetMetrics_TenantB_CannotAccessTenantAService()
     {
         var (_, _, serviceA) = await SeedTenantWithServiceAsync("service-a-metrics");
-        var (clientB, _, _) = await SeedTenantWithServiceAsync("service-b-metrics");
+        var (clientB, tenantB, _) = await SeedTenantWithServiceAsync("service-b-metrics");
 
-        var response = await clientB.GetAsync($"/v1/services/{serviceA.Id}/metrics?range=1h");
+        // Tenant B requesting a service id that does not belong to its own
+        // tenant (even under its own tenantId) must resolve to "not found".
+        var response = await clientB.GetAsync($"/v1/tenants/{tenantB}/services/{serviceA.Id}/metrics?range=1h");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -88,22 +89,12 @@ public class CrossTenantIsolationTests : IClassFixture<WebApplicationFactory<Pro
     [Fact]
     public async Task GetMetrics_TenantA_CanAccessOwnService()
     {
-        var (clientA, _, serviceA) = await SeedTenantWithServiceAsync("service-a-own-metrics");
+        var (clientA, tenantA, serviceA) = await SeedTenantWithServiceAsync("service-a-own-metrics");
 
-        var response = await clientA.GetAsync($"/v1/services/{serviceA.Id}/metrics?range=1h");
+        var response = await clientA.GetAsync($"/v1/tenants/{tenantA}/services/{serviceA.Id}/metrics?range=1h");
         response.EnsureSuccessStatusCode();
         var rollups = await response.Content.ReadFromJsonAsync<List<MetricRollupResponse>>();
 
         Assert.Single(rollups!);
-    }
-
-    [Fact]
-    public async Task Requests_WithoutApiKey_AreUnauthorized()
-    {
-        var client = _factory.CreateClient();
-
-        var response = await client.GetAsync("/v1/services");
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

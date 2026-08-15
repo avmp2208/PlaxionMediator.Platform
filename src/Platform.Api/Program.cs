@@ -18,14 +18,52 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddHealthChecks();
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+// var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+// if (allowedOrigins.Length == 0 && builder.Environment.IsDevelopment())
+// {
+//     // Local-dev default: appsettings.Development.json/launchSettings.json do
+//     // not currently set Cors:AllowedOrigins, which previously resulted in an
+//     // empty WithOrigins() call - i.e. NO origin allowed, causing the Angular
+//     // dashboard to fail every cross-origin request (including the anonymous
+//     // POST /v1/tenants) with a CORS error. Default to the standard `ng serve`
+//     // port plus a few other commonly-used local dev ports (`ng serve --port`
+//     // is often changed, e.g. to 4600, when multiple Angular apps run on one
+//     // machine) so local development works out of the box without needing to
+//     // chase down a CORS error every time the port differs. Production/
+//     // staging/qa must still set Cors:AllowedOrigins explicitly via
+//     // configuration - this fallback only applies in Development.
+//     allowedOrigins =
+//     [
+//         "http://localhost:4200",
+//         "http://localhost:4600",
+//         "https://localhost:4200",
+//         "https://localhost:4600"
+//     ];
+// }
+string[] allowedOrigins =
+[
+    "http://localhost:4200",
+    "http://localhost:4600",
+    "https://localhost:4200",
+    "https://localhost:4600"
+];
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
+    options.AddPolicy("Angular", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-            .AllowAnyMethod()
-            .WithHeaders(ApiKeyAuthenticationDefaults.HeaderName);
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                .AllowCredentials()
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
+        else
+        {
+            policy.AllowAnyOrigin()
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
     });
 });
 
@@ -48,7 +86,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseCors();
+// IMPORTANT: the policy above is registered with a NAME ("Angular") via
+// AddPolicy, not AddDefaultPolicy. Calling app.UseCors() with no argument
+// applies the *default* policy, which was never registered here - so the
+// CORS rules configured above were silently never applied, no matter what
+// origins/ports were listed. The policy name must be passed explicitly.
+app.UseCors("Angular");
 
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/healthz");

@@ -15,7 +15,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
 | `Platform.Ingestion` (OTLP + JSON bridge + API-key admin) | Done |
 | `Platform.Aggregation` | Done |
 | `Platform.Api` | Done |
-| `platform-dashboard-web` (Angular Dashboard) | Done |
+| `platform-dashboard-web` (Angular Dashboard) | In Progress (tenant-list-first flow added; pending backend `/v1/tenants` + `/v1/api-keys`) |
 
 ## Done (implemented and test-verified)
 
@@ -25,6 +25,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
   `src/Platform.Hosting`, `src/Platform.Identity`, `src/Platform.Aggregation`,
   `src/Platform.Api`, with matching `tests/*.Tests` projects.
 - **Angular Dashboard**: Wired to `Platform.Api` (`/v1/services`, `/v1/services/{id}/metrics`) using Angular 18 functional interceptors for `X-Api-Key` auth. Environment-based configuration supports local, staging, qa, and production. Dark-mode Material theme, login validation, and loading/error handling implemented.
+- **Dashboard tenant-list-first flow (In Progress)**: the landing route `/` is now `TenantsComponent`, listing tenants created on this browser via a new `localStorage`-backed `TenantRegistryService` (masked keys only, never plaintext). A "Create Tenant" dialog calls `PlatformApiService.createTenant(name)` (`POST /v1/tenants`, no auth) and shows the returned plaintext key once, copyable via `@angular/cdk/clipboard`. "Manage" signs in (`TenantSessionService.signIn`) and routes to `/services`; older tenants without an in-memory key are prompted to re-paste it. `auth.interceptor.ts` already only attaches `X-Api-Key` when a session key exists, so `createTenant` works unauthenticated. `PlatformApiService` also gained `createApiKey`/`listApiKeys`/`revokeApiKey` for the not-yet-implemented `/v1/api-keys` endpoints. This depends on the backend `POST /v1/tenants` and `/v1/api-keys` endpoints landing in `Platform.Api`, which had not shipped as of this change.
 - **Provider-agnostic storage**: `Platform.Storage` holds only canonical models
   (`Tenant`, `Service`, `MetricSample`, `AggregateRollup`, `ApiKey`) and
   interfaces (`IMetricSampleStore`, `IAggregateRollupStore`, `IServiceCatalog`,
@@ -62,9 +63,11 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
   A new `src/platform-dashboard-web` Angular 18 + Angular Material app
   (dark-mode-only theme) was created with a login page (API key entry,
   sessionStorage), services list, and per-service metrics page with a
-  1h/24h/7d range toggle and loading/empty states — all rendering against an
-  in-memory `MockDataService`. **It is not yet wired to `Platform.Api`.**
-  7 Angular component specs pass (`ng test`). See `docs/dashboard.md`.
+  1h/24h/7d range toggle and loading/empty states, and is wired to
+  `Platform.Api`. A tenant-list-first landing page (`TenantsComponent`,
+  `TenantRegistryService`, `CreateTenantDialogComponent`,
+  `RebindKeyDialogComponent`) was added on top of this. 32 Angular
+  component/service specs pass (`ng test`). See `docs/dashboard.md`.
 - **MVP hardening (lightweight)**:
   - 1 MiB request body limits on `/v1/metrics` and `/v1/ingest` (Kestrel +
     `[RequestSizeLimit]`).
@@ -81,7 +84,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
   - Platform.Identity.Tests: 6
   - Platform.Aggregation.Tests: 4
   - Platform.Api.Tests: 7
-  - `platform-dashboard-web` (Angular, separate toolchain): wired to real HTTP, 7 specs pass.
+  - `platform-dashboard-web` (Angular, separate toolchain): wired to real HTTP, 32 specs pass.
 - Rate limiting (beyond body-size + cardinality guards).
 - Self-observability dogfooding (Platform emitting its own OTLP metrics).
 - Production multi-process default still requires operators to set the same

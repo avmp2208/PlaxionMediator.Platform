@@ -6,9 +6,9 @@
     </div>
 
     <mat-nav-list>
-      <a mat-list-item routerLink="/services" routerLinkActive="active-link">
-        <mat-icon matListItemIcon>dns</mat-icon>
-        <span matListItemTitle>Services</span>
+      <a mat-list-item (click)="switchTenant()">
+        <mat-icon matListItemIcon>apartment</mat-icon>
+        <span matListItemTitle>All Tenants</span>
       </a>
     </mat-nav-list>
 
@@ -21,13 +21,6 @@
     <mat-toolbar class="shell-toolbar">
       <span class="toolbar-title">Platform Dashboard</span>
       <span class="spacer"></span>
-      <span class="api-key-chip" matTooltip="Active tenant API key (masked)">
-        <mat-icon>vpn_key</mat-icon>
-        {{ session.maskedApiKey() }}
-      </span>
-      <button mat-icon-button (click)="signOut()" matTooltip="Sign out">
-        <mat-icon>logout</mat-icon>
-      </button>
     </mat-toolbar>
 
     <div class="shell-body">

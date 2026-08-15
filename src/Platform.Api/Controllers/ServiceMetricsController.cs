@@ -1,13 +1,11 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Platform.Identity;
 using Platform.Storage;
 
 namespace Platform.Api.Controllers;
 
+// NOTE: authentication intentionally removed for now - see ServicesController.
 [ApiController]
-[Authorize(AuthenticationSchemes = ApiKeyAuthenticationDefaults.SchemeName)]
-[Route("v1/services/{id:guid}/metrics")]
+[Route("v1/tenants/{tenantId:guid}/services/{id:guid}/metrics")]
 public sealed class ServiceMetricsController : ControllerBase
 {
     private readonly IServiceCatalog _serviceCatalog;
@@ -21,12 +19,11 @@ public sealed class ServiceMetricsController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<MetricRollupResponse>>> GetMetrics(
+        Guid tenantId,
         Guid id,
         [FromQuery] string? range,
         CancellationToken cancellationToken)
     {
-        var tenantId = User.GetTenantId();
-
         // Cross-tenant isolation gate: a service id belonging to another
         // tenant must resolve to "not found", never to another tenant's data.
         var service = await _serviceCatalog.GetByIdAsync(tenantId, id, cancellationToken);

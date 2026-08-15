@@ -27,12 +27,12 @@ import { TenantSessionService } from '../../core/tenant-session.service';
 })
 export class ShellComponent {
   constructor(
-    readonly session: TenantSessionService,
+    private readonly session: TenantSessionService,
     private readonly router: Router
   ) {}
 
-  signOut(): void {
+  switchTenant(): void {
     this.session.signOut();
-    this.router.navigateByUrl('/login');
+    this.router.navigateByUrl('/');
   }
 }

@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
@@ -27,12 +27,17 @@ import { ServiceSummary } from '../../core/models';
 export class ServicesComponent implements OnInit {
   services: ServiceSummary[] = [];
   loading = true;
+  tenantId = '';
   readonly displayedColumns = ['name', 'environment', 'actions'];
 
-  constructor(private readonly api: PlatformApiService) {}
+  constructor(
+    private readonly api: PlatformApiService,
+    private readonly route: ActivatedRoute
+  ) {}
 
   ngOnInit(): void {
-    this.api.getServices().subscribe({
+    this.tenantId = this.route.snapshot.paramMap.get('tenantId') ?? '';
+    this.api.getServices(this.tenantId).subscribe({
       next: (services) => {
         this.services = services;
         this.loading = false;

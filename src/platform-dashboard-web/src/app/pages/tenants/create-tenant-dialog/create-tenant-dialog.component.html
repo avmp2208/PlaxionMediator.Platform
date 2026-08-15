@@ -1,0 +1,54 @@
+<h2 mat-dialog-title>Create Tenant</h2>
+
+<mat-dialog-content>
+  @if (!result) {
+    <p class="dialog-copy">
+      Give this tenant a name. We'll generate an API key you can share with the service that
+      will send metrics.
+    </p>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Tenant / organization name</mat-label>
+      <input
+        matInput
+        name="tenantName"
+        [(ngModel)]="tenantName"
+        placeholder="Acme Corp"
+        autocomplete="off"
+        [disabled]="loading"
+      />
+    </mat-form-field>
+
+    @if (error) {
+      <p class="error-text">{{ error }}</p>
+    }
+  } @else {
+    <p class="dialog-copy warning">
+      <mat-icon>warning</mat-icon>
+      This key will not be shown again. Copy it now and share it with the service that will send metrics.
+    </p>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>API key for {{ result.tenantName }}</mat-label>
+      <input matInput [value]="result.plaintextKey" readonly (click)="copyKey()" />
+      <button mat-icon-button matSuffix (click)="copyKey()" matTooltip="Copy to clipboard" type="button">
+        <mat-icon>content_copy</mat-icon>
+      </button>
+    </mat-form-field>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (!result) {
+    <button mat-button mat-dialog-close [disabled]="loading">Cancel</button>
+    <button mat-flat-button color="primary" (click)="submit()" [disabled]="loading">
+      @if (loading) {
+        <mat-spinner diameter="20" color="accent"></mat-spinner>
+      } @else {
+        Create
+      }
+    </button>
+  } @else {
+    <button mat-flat-button color="primary" (click)="done()">Done</button>
+  }
+</mat-dialog-actions>

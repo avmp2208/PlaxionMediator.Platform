@@ -66,7 +66,9 @@ public static class ClaimsPrincipalExtensions
 {
     /// <summary>
     /// Extracts the trusted TenantId from an authenticated ClaimsPrincipal.
-    /// Throws if absent - callers must be behind [Authorize].
+    /// Throws if absent - callers must be behind [Authorize], or must first
+    /// check <see cref="TryGetTenantId"/> when the endpoint is not gated by
+    /// [Authorize].
     /// </summary>
     public static Guid GetTenantId(this ClaimsPrincipal principal)
     {
@@ -77,5 +79,24 @@ public static class ClaimsPrincipalExtensions
         }
 
         return tenantId;
+    }
+
+    /// <summary>
+    /// Attempts to extract the trusted TenantId without throwing. Used by
+    /// endpoints that no longer enforce [Authorize] but still need to
+    /// derive TenantId only from a successfully validated API key, and must
+    /// respond with 401 (rather than an unhandled exception) when no key
+    /// was presented or it failed validation.
+    /// </summary>
+    public static bool TryGetTenantId(this ClaimsPrincipal principal, out Guid tenantId)
+    {
+        var value = principal.FindFirstValue(ApiKeyAuthenticationDefaults.TenantIdClaimType);
+        if (value is null || !Guid.TryParse(value, out tenantId))
+        {
+            tenantId = Guid.Empty;
+            return false;
+        }
+
+        return true;
     }
 }

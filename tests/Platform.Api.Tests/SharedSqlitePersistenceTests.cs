@@ -108,12 +108,12 @@ public sealed class SharedSqlitePersistenceTests : IAsyncLifetime
         var apiClient = apiFactory.CreateClient();
         apiClient.DefaultRequestHeaders.Add(ApiKeyAuthenticationDefaults.HeaderName, apiKey);
 
-        var services = await apiClient.GetFromJsonAsync<List<ServiceResponse>>("/v1/services");
+        var services = await apiClient.GetFromJsonAsync<List<ServiceResponse>>($"/v1/tenants/{tenantId}/services");
         var service = Assert.Single(services!);
         Assert.Equal("shared-svc", service.Name);
 
         var metrics = await apiClient.GetFromJsonAsync<List<MetricRollupResponse>>(
-            $"/v1/services/{service.Id}/metrics?range=24h");
+            $"/v1/tenants/{tenantId}/services/{service.Id}/metrics?range=24h");
         Assert.NotEmpty(metrics!);
     }
 

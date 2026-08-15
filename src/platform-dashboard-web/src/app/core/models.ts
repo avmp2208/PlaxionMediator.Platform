@@ -24,3 +24,35 @@ export interface MetricSeries {
   unit: string;
   points: MetricPoint[];
 }
+
+export interface CreateTenantResponse {
+  tenantId: string;
+  tenantName: string;
+  apiKeyId: string;
+  apiKeyName: string;
+  plaintextKey: string;
+  createdAt: string;
+}
+
+export interface ApiKeyListItem {
+  id: string;
+  name: string;
+  createdAt: string;
+  isActive: boolean;
+  revokedAt: string | null;
+}
+
+export interface CreateApiKeyResponse {
+  id: string;
+  name: string;
+  plaintextKey: string;
+}
+
+export interface TenantRegistryEntry {
+  tenantId: string;
+  tenantName: string;
+  apiKeyId: string;
+  apiKeyName: string;
+  maskedKey: string;
+  createdAt: string;
+}

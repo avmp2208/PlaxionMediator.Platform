@@ -1,27 +1,29 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/auth.guard';
 
 export const routes: Routes = [
   {
-    path: 'login',
-    loadComponent: () => import('./pages/login/login.component').then(m => m.LoginComponent)
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./pages/tenants/tenants.component').then(m => m.TenantsComponent)
   },
   {
     path: '',
     loadComponent: () => import('./layout/shell/shell.component').then(m => m.ShellComponent),
-    canActivate: [authGuard],
+    // No authGuard: viewing a tenant's services only requires knowing its
+    // TenantId (see ServicesController/ServiceMetricsController in
+    // Platform.Api) - authentication/authorization is deferred to future
+    // hardening work, out of scope for this MVP flow.
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'services' },
       {
-        path: 'services',
+        path: 'tenants/:tenantId/services',
         loadComponent: () => import('./pages/services/services.component').then(m => m.ServicesComponent)
       },
       {
-        path: 'services/:id',
+        path: 'tenants/:tenantId/services/:id',
         loadComponent: () =>
           import('./pages/service-metrics/service-metrics.component').then(m => m.ServiceMetricsComponent)
       }
     ]
   },
-  { path: '**', redirectTo: 'services' }
+  { path: '**', redirectTo: '' }
 ];

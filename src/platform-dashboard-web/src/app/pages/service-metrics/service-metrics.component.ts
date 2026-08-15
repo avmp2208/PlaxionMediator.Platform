@@ -32,6 +32,7 @@ export class ServiceMetricsComponent implements OnInit {
   range: TimeRange = '1h';
   loading = true;
   readonly displayedColumns = ['bucket', 'avg', 'p50', 'p95', 'p99', 'min', 'max', 'count'];
+  tenantId = '';
   private serviceId = '';
 
   constructor(
@@ -40,8 +41,9 @@ export class ServiceMetricsComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.tenantId = this.route.snapshot.paramMap.get('tenantId') ?? '';
     this.serviceId = this.route.snapshot.paramMap.get('id') ?? '';
-    this.api.getServiceById(this.serviceId).subscribe(service => (this.service = service));
+    this.api.getServiceById(this.tenantId, this.serviceId).subscribe(service => (this.service = service));
     this.loadMetrics();
   }
 
@@ -55,7 +57,7 @@ export class ServiceMetricsComponent implements OnInit {
 
   private loadMetrics(): void {
     this.loading = true;
-    this.api.getServiceMetrics(this.serviceId, this.range).subscribe({
+    this.api.getServiceMetrics(this.tenantId, this.serviceId, this.range).subscribe({
       next: (series) => {
         this.series = series;
         this.loading = false;

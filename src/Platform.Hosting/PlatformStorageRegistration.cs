@@ -13,9 +13,9 @@ public static class PlatformStorageRegistration
 
     /// <summary>
     /// Registers durable relational storage (SQLite, MySQL or PostgreSQL,
-    /// selected via "Storage:Provider") outside Development/Testing, and
-    /// in-memory storage as the local/test fallback. Also registers
-    /// <see cref="ApiKeyService"/>.
+    /// selected via "Storage:Provider" and represented by <see cref="RelationalProvider"/>)
+    /// outside Development/Testing, and in-memory storage as the local/test
+    /// fallback. Also registers <see cref="ApiKeyService"/>.
     /// </summary>
     public static IServiceCollection AddPlatformStorage(
         this IServiceCollection services,
@@ -43,18 +43,19 @@ public static class PlatformStorageRegistration
                      ?? "Data Source=platform.db";
 
             // "Sqlite" is the default durable provider when none is configured explicitly.
-            if (string.Equals(provider, "MySql", StringComparison.OrdinalIgnoreCase))
+            var relationalProvider = ParseRelationalProvider(provider) ?? RelationalProvider.Sqlite;
+            switch (relationalProvider)
             {
-                services.AddPlatformMySqlStorage(cs);
-            }
-            else if (string.Equals(provider, "Postgres", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase))
-            {
-                services.AddPlatformPostgresStorage(cs);
-            }
-            else
-            {
-                services.AddPlatformSqliteStorage(cs);
+                case RelationalProvider.MySql:
+                    services.AddPlatformMySqlStorage(cs);
+                    break;
+                case RelationalProvider.PostgreSql:
+                    services.AddPlatformPostgresStorage(cs);
+                    break;
+                case RelationalProvider.Sqlite:
+                default:
+                    services.AddPlatformSqliteStorage(cs);
+                    break;
             }
         }
         else
@@ -64,5 +65,30 @@ public static class PlatformStorageRegistration
 
         services.AddSingleton<ApiKeyService>();
         return services;
+    }
+
+    /// <summary>
+    /// Parses the "Storage:Provider" configuration string into a
+    /// <see cref="RelationalProvider"/>. Returns null when the value is
+    /// null/empty or does not correspond to a known provider (e.g. "InMemory"),
+    /// in which case in-memory storage should be used instead. Accepts the
+    /// alias "Postgres" as a synonym for <see cref="RelationalProvider.PostgreSql"/>,
+    /// and is case-insensitive.
+    /// </summary>
+    public static RelationalProvider? ParseRelationalProvider(string? provider)
+    {
+        if (string.IsNullOrWhiteSpace(provider))
+        {
+            return null;
+        }
+
+        if (string.Equals(provider, "Postgres", StringComparison.OrdinalIgnoreCase))
+        {
+            return RelationalProvider.PostgreSql;
+        }
+
+        return Enum.TryParse<RelationalProvider>(provider, ignoreCase: true, out var parsed)
+            ? parsed
+            : null;
     }
 }
