@@ -55,11 +55,12 @@ Notes:
   - `GET /v1/services`
   - `GET /v1/services/{id}/metrics?range=1h`
 
-### 4. Dashboard (In Progress — UI only, not yet wired)
-The operator Dashboard is being re-platformed to **Angular + Angular Material**
-(dark mode). The current build is a **UI-only scaffold** rendering mock data —
-it does **not** yet call `GET /v1/services` / `GET /v1/services/{id}/metrics`,
-so it cannot be used to verify real ingested data today. To preview the UI:
+### 4. Dashboard
+The operator Dashboard is **Angular + Angular Material** (dark mode), fully wired
+to `Platform.Api`. It calls `GET /v1/services` / `GET /v1/services/{id}/metrics`
+and renders throughput, P50/P95/P99 latency, and failure-rate charts plus a
+paginated request-types table, so it can be used to verify real ingested data.
+To run it:
 
 ```powershell
 cd src/platform-dashboard-web
@@ -67,8 +68,7 @@ npm install
 ng serve   # http://localhost:4200
 ```
 
-Use the API calls in step 3 above to verify ingestion until the Dashboard is
-wired to Platform.Api. See `docs/dashboard.md` for current status and scope.
+See `docs/dashboard.md` for current status and scope.
 
 ## Back-compat bridge: simplified JSON → `POST /v1/ingest`
 

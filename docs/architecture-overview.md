@@ -11,7 +11,7 @@
 | `Platform.Ingestion` | ASP.NET Core Web API | Done | `POST /v1/metrics` (OTLP protobuf), `POST /v1/ingest` (JSON bridge), `/v1/api-keys` admin, `/health`. |
 | `Platform.Aggregation` | class library | Done | `RollupAggregator.Compute` + `AggregationHostedService` (scheduled). |
 | `Platform.Api` | ASP.NET Core Web API | Done | `GET /v1/services`, `GET /v1/services/{id}/metrics`; hosts aggregation job; `/health`. |
-| `platform-dashboard-web` | Angular (Material, dark mode) | **In Progress** | Operator UI; **UI only** so far — renders against mock data, not yet wired to Platform.Api. Replaces the removed Blazor `Platform.Dashboard` project. |
+| `platform-dashboard-web` | Angular (Material, dark mode) | Done | Operator UI; fully wired to Platform.Api, with throughput/P50-P95-P99-latency/failure-rate charts and a paginated request-types table. Replaces the removed Blazor `Platform.Dashboard` project. |
 
 ## Data flow
 
@@ -36,7 +36,7 @@
                          X-Api-Key over HTTP (session-stored in browser)
                                         |
                                         v
-                  platform-dashboard-web (Angular) -- NOT YET WIRED (mock data only)
+                  platform-dashboard-web (Angular)
 ```
 
 ## Tenant model
@@ -44,7 +44,7 @@
 - The only way to obtain a `TenantId` for a request is through a validated API key.
 - OTLP resource attributes never supply tenancy.
 - Stores filter by `TenantId` at the query boundary; cross-tenant reads return empty/404.
-- Dashboard never sees or stores `TenantId`; it only holds the API key and lets Platform.Api resolve tenancy (this call is not implemented yet — see `docs/dashboard.md`).
+- Dashboard never sees or stores `TenantId`; it only holds the API key and lets Platform.Api resolve tenancy.
 
 ## Storage selection
 See `docs/storage-decision.md`. Development/Testing → in-memory by default;

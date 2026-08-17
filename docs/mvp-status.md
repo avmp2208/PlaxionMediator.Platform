@@ -15,7 +15,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
 | `Platform.Ingestion` (OTLP + JSON bridge + API-key admin) | Done |
 | `Platform.Aggregation` | Done |
 | `Platform.Api` | Done |
-| `platform-dashboard-web` (Angular Dashboard) | In Progress (tenant-list-first flow added; pending backend `/v1/tenants` + `/v1/api-keys`) |
+| `platform-dashboard-web` (Angular Dashboard) | Done |
 
 ## Done (implemented and test-verified)
 
@@ -25,7 +25,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
   `src/Platform.Hosting`, `src/Platform.Identity`, `src/Platform.Aggregation`,
   `src/Platform.Api`, with matching `tests/*.Tests` projects.
 - **Angular Dashboard**: Wired to `Platform.Api` (`/v1/services`, `/v1/services/{id}/metrics`) using Angular 18 functional interceptors for `X-Api-Key` auth. Environment-based configuration supports local, staging, qa, and production. Dark-mode Material theme, login validation, and loading/error handling implemented.
-- **Dashboard tenant-list-first flow (In Progress)**: the landing route `/` is now `TenantsComponent`, listing tenants created on this browser via a new `localStorage`-backed `TenantRegistryService` (masked keys only, never plaintext). A "Create Tenant" dialog calls `PlatformApiService.createTenant(name)` (`POST /v1/tenants`, no auth) and shows the returned plaintext key once, copyable via `@angular/cdk/clipboard`. "Manage" signs in (`TenantSessionService.signIn`) and routes to `/services`; older tenants without an in-memory key are prompted to re-paste it. `auth.interceptor.ts` already only attaches `X-Api-Key` when a session key exists, so `createTenant` works unauthenticated. `PlatformApiService` also gained `createApiKey`/`listApiKeys`/`revokeApiKey` for the not-yet-implemented `/v1/api-keys` endpoints. This depends on the backend `POST /v1/tenants` and `/v1/api-keys` endpoints landing in `Platform.Api`, which had not shipped as of this change.
+- **Dashboard tenant-list-first flow (Done)**: the landing route `/` is `TenantsComponent`, listing tenants created on this browser via a `localStorage`-backed `TenantRegistryService` (masked keys only, never plaintext). A "Create Tenant" dialog calls `PlatformApiService.createTenant(name)` (`POST /v1/tenants`, no auth) and shows the returned plaintext key once, copyable via `@angular/cdk/clipboard`. "Manage" signs in (`TenantSessionService.signIn`) and routes to `/services`; older tenants without an in-memory key are prompted to re-paste it. `auth.interceptor.ts` only attaches `X-Api-Key` when a session key exists, so `createTenant` works unauthenticated. `PlatformApiService` also has `createApiKey`/`listApiKeys`/`revokeApiKey`, backed by the now-shipped `/v1/api-keys` endpoints in `Platform.Api`.
 - **Provider-agnostic storage**: `Platform.Storage` holds only canonical models
   (`Tenant`, `Service`, `MetricSample`, `AggregateRollup`, `ApiKey`) and
   interfaces (`IMetricSampleStore`, `IAggregateRollupStore`, `IServiceCatalog`,
@@ -57,16 +57,20 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
   (also registered on Platform.Api).
 - `Platform.Api`: `GET /v1/services`, `GET /v1/services/{id}/metrics?range=`,
   tenant isolation (cross-tenant → 404).
-- **Dashboard re-platformed to Angular (In Progress, UI only)**: the previous
+- **Dashboard re-platformed to Angular (Done)**: the previous
   `Platform.Dashboard` Blazor Server project and `Platform.Dashboard.Tests`
   were **removed** per an explicit product decision to move to Angular.
-  A new `src/platform-dashboard-web` Angular 18 + Angular Material app
-  (dark-mode-only theme) was created with a login page (API key entry,
-  sessionStorage), services list, and per-service metrics page with a
-  1h/24h/7d range toggle and loading/empty states, and is wired to
-  `Platform.Api`. A tenant-list-first landing page (`TenantsComponent`,
+  `src/platform-dashboard-web` is an Angular 18 + Angular Material app
+  (dark-mode-only theme) with a login page (API key entry,
+  sessionStorage), services list, and per-service metrics dashboard with a
+  1h/24h/7d range toggle, real throughput/P50-P95-P99-latency/failure-rate
+  time-series charts (`ng2-charts`/Chart.js) sharing one bucket timeline with
+  correct idle/gap semantics (no carry-forward), a server-side paginated and
+  server-ordered request-types table, and loading/error states (zero-traffic
+  ranges render the full dashboard, not a full-page empty state). A
+  tenant-list-first landing page (`TenantsComponent`,
   `TenantRegistryService`, `CreateTenantDialogComponent`,
-  `RebindKeyDialogComponent`) was added on top of this. 32 Angular
+  `RebindKeyDialogComponent`) sits on top of this. 77 Angular
   component/service specs pass (`ng test`). See `docs/dashboard.md`.
 - **MVP hardening (lightweight)**:
   - 1 MiB request body limits on `/v1/metrics` and `/v1/ingest` (Kestrel +
@@ -75,17 +79,16 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
     names/request (plus existing 256-char name limits).
   - API-key plaintext never logged (dev seed writes to `.dev-api-key` file only).
   - `/health` and `/healthz` on Platform.Ingestion and Platform.Api.
-- Tests: **103 total, all green** (`dotnet build` + `dotnet test`, 0
+- Tests: **140 total, all green** (`dotnet build` + `dotnet test`, 0
   warnings/errors) — the .NET solution no longer includes a Dashboard test
-  project. Counts as of this session (up from 100, +3 from this session's
-  hardening/rate-limit/malformed-payload/real-e2e work):
-  - Platform.Storage.Tests: 19
-  - Platform.Storage.Relational.Tests: 12
-  - Platform.Ingestion.Tests: 25
+  project. Counts as of the final Doc B certification pass:
+  - Platform.Storage.Tests: 22
+  - Platform.Storage.Relational.Tests: 15
+  - Platform.Ingestion.Tests: 45
   - Platform.Identity.Tests: 6
-  - Platform.Aggregation.Tests: 9
-  - Platform.Api.Tests: 32
-  - `platform-dashboard-web` (Angular, separate toolchain): last reported 39/39 specs pass; not touched or re-verified this session.
+  - Platform.Aggregation.Tests: 11
+  - Platform.Api.Tests: 41
+  - `platform-dashboard-web` (Angular, separate toolchain): 77/77 specs pass (`ng test --browsers=ChromeHeadless`), re-run and verified during the final certification pass.
 - Rate limiting is now implemented for the anonymous `POST /v1/tenants` bootstrap endpoint (5 req/min per client IP, 429 on excess); other endpoints still rely on body-size + cardinality guards plus API-key auth rather than IP rate limiting.
 - Platform self-observability is now implemented via standard .NET `Meter`/`Counter`/`Histogram` instruments across `Platform.Ingestion`, `Platform.Aggregation`, and `Platform.Api` (see `IngestionMetrics`, `AggregationMetrics`, `ApiMetrics`); Platform does not yet dogfood the PlaxionMediator/OTLP exporter path for its own telemetry.
 - Raw `MetricSample` retention/eviction is now implemented (`Platform.Aggregation/RetentionHostedService.cs`).
@@ -124,9 +127,8 @@ real end-to-end OTLP acceptance tests. The Angular Dashboard is wired to the
 real `Platform.Api` backend (tenant list, create-tenant, per-service
 metrics with time-range toggle) - it is no longer a mock-data scaffold.
 
-Remaining polish (dashboard charts, real managed Postgres/MySQL exercise,
-browser E2E coverage) is incremental and explicitly non-blocking for the
-Doc B MVP bar.
+Remaining polish (real managed Postgres/MySQL exercise, browser E2E
+coverage) is incremental and explicitly non-blocking for the Doc B MVP bar.
 
 ## Confirmations
 

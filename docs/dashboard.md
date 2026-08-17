@@ -37,7 +37,7 @@ To add a new environment:
 | `/` | **Landing page.** Lists all tenants created on this browser (`TenantRegistryService`), with a "Create Tenant" button and a "Manage" action per tenant. Empty state when no tenants exist yet. | `TenantRegistryService.tenants()` (local, no HTTP). |
 | `/login` | Fallback entry point: paste an existing tenant API key directly (also linked from `/` as "Already have an API key?"). Resolves the key's `TenantId` via `GET /v1/api-keys/whoami`, then navigates into the tenant. | `PlatformApiService.whoAmI()`. |
 | `/tenants/:tenantId/services` | Service list for the given tenant (reached via "Manage" on `/`). Requires an active session API key for this tenant (`authGuard`); the server independently rejects any mismatch between the key's tenant and the URL's `TenantId`. | `PlatformApiService.getServices(tenantId)`. |
-| `/tenants/:tenantId/services/:id` | **Status: Done.** Per-service metrics dashboard with `1h` / `24h` / `7d` range toggle: summary cards (total executions, P50/P95/P99, failure %, distinct request-type count), a throughput chart, a multi-line latency chart (P50/P95/P99), a failure-rate chart (or an explanatory note when no failures occurred in range), and a server-side-paginated request-type ranking table. Same auth requirements as the services list. | `PlatformApiService.getServiceMetricsRaw(tenantId, id, range)` (cards/charts) + `PlatformApiService.getRequestTypeRanking(tenantId, id, range, page, pageSize)` (table). |
+| `/tenants/:tenantId/services/:id` | **Status: Done.** Per-service metrics dashboard with `1h` / `24h` / `7d` range toggle: summary cards (total executions, P50/P95/P99 or — when no executions, failure %, distinct request-type count), a throughput chart, a multi-line latency chart (P50/P95/P99), a failure-rate chart, and a server-side-paginated request-type ranking table. The full dashboard always renders, including for zero-traffic ranges. Same auth requirements as the services list. | `PlatformApiService.getServiceMetricsRaw(tenantId, id, range)` (cards/charts) + `PlatformApiService.getRequestTypeRanking(tenantId, id, range, page, pageSize)` (table). |
 
 Loading, empty, and error states are handled for all HTTP calls.
 
@@ -55,15 +55,15 @@ below) and is no longer computed by this module.
   contributing `request.duration` rows (documented inline in `metrics-view-model.ts`). This is the simplest
   defensible aggregation that avoids "max of maxes" distortion while still weighting busier buckets/request types
   more heavily.
-- The **failure-rate chart** is only rendered when there is at least one `pipeline_exception.count` row or a
-  non-zero failure rate in the selected range; otherwise a "No failures observed in this range" note is shown
-  instead of a flat, misleading zero-line chart.
 - Metrics with `requestType: null` (non-mediator-specific metrics) are excluded from the client-side charts described
   above; they are out of scope for this dashboard.
-- **No fabricated data points**: `buildThroughput`/`buildLatency`/`buildFailureRate` in `metrics-view-model.ts` only
-  emit a point for buckets that actually have data - empty buckets are never zero-filled/interpolated. Combined with
-  the fixed chart axis domain described below, a sparse range (e.g. only 1-3 real data points) renders those points
-  at their correct real position within the full time axis, instead of stretching them to fill the chart.
+- **Correct temporal/idle semantics, never carry-forward**: `buildThroughput`/`buildLatency`/`buildFailureRate` in
+  `metrics-view-model.ts` generate one entry per bucket across the entire selected range (from range start through
+  to "now"), independent of whether that bucket has real data. Idle/no-execution buckets get throughput `0` and
+  failure rate `0%` (valid, real values - not fabricated), while latency (P50/P95/P99) is `null` for idle buckets
+  (a real gap - never 0ms and never the previous bucket's value). All three charts share the exact same bucket
+  timeline/X-axis, and Chart.js is configured with `spanGaps: false` so `null` latency points render as visible
+  breaks instead of being interpolated.
 - **Known gap** (same as noted in the backend's own metrics documentation): the OSS mediator package does not emit
   a handler-type dimension, only `requestType` — so there is no handler-level ranking or drill-down here, only
   request-type. A request-type detail/drill-down view is intentionally out of scope for this iteration.
