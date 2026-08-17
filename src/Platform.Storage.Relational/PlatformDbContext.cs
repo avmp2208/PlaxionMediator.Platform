@@ -38,6 +38,10 @@ public sealed class PlatformDbContext : DbContext
             e.ToTable("aggregate_rollups");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.ServiceId, x.BucketStartUtc, x.RequestType });
+            // Used by RelationalAggregateRollupStore.AddRangeAsync to look up
+            // existing rows to update (upsert) instead of always inserting,
+            // which is what previously caused unbounded duplicate growth.
+            e.HasIndex(x => new { x.TenantId, x.ServiceId, x.MetricName, x.RequestType, x.BucketStartUtc });
             e.Property(x => x.ServiceName).HasMaxLength(256).IsRequired();
             e.Property(x => x.Environment).HasMaxLength(128).IsRequired();
             e.Property(x => x.MetricName).HasMaxLength(256).IsRequired();

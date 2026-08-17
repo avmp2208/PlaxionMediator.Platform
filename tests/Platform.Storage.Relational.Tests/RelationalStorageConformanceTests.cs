@@ -1,13 +1,72 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Platform.Storage;
 using Platform.Storage.Relational;
 using Platform.Storage.Tests;
+using Xunit;
 
 namespace Platform.Storage.Relational.Tests;
 
 public sealed class RelationalStorageConformanceTests : StorageProviderConformanceTests
 {
+    [Fact]
+    public async Task AddPlatformSqliteStorage_EnablesWalMode_SoReadsAreNotBlockedByWrites()
+    {
+        // Regression test for the UI being unable to fetch data while the
+        // aggregation/ingestion background writers were active: without WAL
+        // mode, SQLite's default rollback-journal mode locks the whole
+        // database file for readers during a writer's transaction.
+        var path = Path.Combine(Path.GetTempPath(), $"platform-storage-wal-{Guid.NewGuid():N}.db");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadWriteCreate
+        }.ToString();
+
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddPlatformSqliteStorage(connectionString);
+            using var provider = services.BuildServiceProvider();
+            var factory = provider.GetRequiredService<IDbContextFactory<PlatformDbContext>>();
+
+            await using var db = await factory.CreateDbContextAsync();
+            await db.Database.EnsureCreatedAsync();
+
+            var connection = db.Database.GetDbConnection();
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA journal_mode;";
+            var journalMode = (string)(await command.ExecuteScalarAsync())!;
+
+            Assert.Equal("wal", journalMode, ignoreCase: true);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+
+                foreach (var extra in new[] { "-wal", "-shm" })
+                {
+                    if (File.Exists(path + extra))
+                    {
+                        File.Delete(path + extra);
+                    }
+                }
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+        }
+    }
+
     protected override async Task<StorageHandles> CreateStoresAsync()
     {
         var path = Path.Combine(Path.GetTempPath(), $"platform-storage-{Guid.NewGuid():N}.db");

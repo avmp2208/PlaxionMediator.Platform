@@ -67,13 +67,55 @@ describe('ServiceMetricsComponent', () => {
     expect(component.loading).toBeTrue();
   });
 
-  it('shows empty state when there are no requests in range', () => {
+  it('renders the full dashboard (not a full-page empty state) when there are no requests in range', () => {
     createComponent();
     fixture.detectChanges();
 
     expect(component.loading).toBeFalse();
     expect(component.error).toBeFalse();
     expect(component.viewModel?.overview.totalExecutions).toBe(0);
+    expect(component.viewModel?.overview.p50).toBeNull();
+    expect(component.viewModel?.overview.p95).toBeNull();
+    expect(component.viewModel?.overview.p99).toBeNull();
+    expect(component.viewModel?.overview.failurePercent).toBe(0);
+    expect(component.viewModel?.overview.distinctRequestTypeCount).toBe(0);
+
+    // The old full-page "No requests observed" empty card must be gone; the dashboard renders.
+    const compiled: HTMLElement = fixture.nativeElement;
+    expect(compiled.textContent).not.toContain('No requests observed in this range');
+    expect(compiled.querySelector('.summary-grid')).toBeTruthy();
+    expect(compiled.querySelector('.charts-grid')).toBeTruthy();
+    expect(compiled.querySelector('.ranking-card')).toBeTruthy();
+
+    // Throughput/failure-rate charts must be zero-filled, latency null-filled, across the whole range.
+    expect(component.viewModel?.throughput.every(p => p.count === 0)).toBeTrue();
+    expect(component.viewModel?.failureRate.every(p => p.failureRatePercent === 0)).toBeTrue();
+    expect(component.viewModel?.latency.every(p => p.p50 === null && p.p95 === null && p.p99 === null)).toBeTrue();
+
+    // The Request Types table keeps its own, separate inline empty state.
+    expect(compiled.textContent).toContain('No request types observed in this range.');
+  });
+
+  it('renders the full dashboard for zero-traffic Last 24 Hours', () => {
+    createComponent();
+    component.selectRange('24h');
+    fixture.detectChanges();
+
+    expect(component.viewModel?.overview.totalExecutions).toBe(0);
+    const compiled: HTMLElement = fixture.nativeElement;
+    expect(compiled.textContent).not.toContain('No requests observed in this range');
+    expect(compiled.querySelector('.summary-grid')).toBeTruthy();
+  });
+
+  it('renders the full dashboard for zero-traffic Last 7 Days', () => {
+    createComponent();
+    component.selectRange('7d');
+    fixture.detectChanges();
+
+    expect(component.viewModel?.overview.totalExecutions).toBe(0);
+    const compiled: HTMLElement = fixture.nativeElement;
+    expect(compiled.textContent).not.toContain('No requests observed in this range');
+    expect(compiled.querySelector('.summary-grid')).toBeTruthy();
   });
 
   it('shows error state when the API call fails', () => {

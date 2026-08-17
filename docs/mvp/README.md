@@ -1,6 +1,6 @@
 # Doc B MVP — Execution Index
 
-**FINAL RECOMMENDATION: GO for Doc B MVP.** All previously release-blocking items (tenant-query authentication, raw-sample retention, Platform self-observability) are now implemented and verified in code/tests, plus this session added MVP security hardening (rate limiting, malformed-payload handling, health checks), a measured performance baseline, and a real end-to-end OTLP acceptance test proving cross-tenant isolation holds through the genuine OpenTelemetry SDK path. See section 6 for the full DoD checklist and section 7 for the detailed rationale and remaining non-blocking follow-ups.
+**FINAL CERTIFICATION: GO FOR DOC B MVP — COMPLETE.** All Doc B release-blocking Definition of Done items are implemented and verified directly against code/tests as of this final certification pass, including the two items previously tracked as PARTIAL/NOT STARTED in earlier drafts of this document: the Dashboard now has real throughput/P50-P95-P99-latency/failure-rate time-series charts (Chart.js via `ng2-charts`) with correct per-bucket semantics (no carry-forward, null latency gaps, zero-filled idle throughput/failure-rate, full range-to-now domain, zero-traffic ranges still render the full dashboard), and the request-types table is server-side paginated and server-ordered. This session also fixed a real production bug found via manual testing (unbounded duplicate-row growth in `aggregate_rollups` from the aggregation job re-inserting instead of upserting, plus SQLite whole-file write locks blocking reads during writes) — both are now fixed and regression-tested. See section 6 for the full DoD checklist and section 2 for the reconciled gap analysis.
 
 This document is the single execution index for finishing Doc B (`B-platform-mvp-execution-plan.md`). It reflects the repository as verified in code/tests today, not just prior status docs. Where prior docs (`docs/mvp-status.md`, `docs/dashboard.md`, `README.md`) disagreed with the actual code, this document corrects them and calls out the discrepancy explicitly.
 
@@ -78,13 +78,17 @@ This is a real, working, verified happy path for a single tenant and matches wha
 #### Partial capabilities (PARTIAL)
 | Capability | Gap |
 |---|---|
-| Dashboard metric visualization | Tables with numeric aggregates (avg/p50/p95/p99/min/max/count) exist; Doc B's "metric/history visualization" is arguably satisfied minimally, but there are no charts/graphs - acceptable for MVP but should be called out as a simplification, not silently claimed as full "visualization." |
 | PostgreSQL/MySQL providers | Only unit/conformance-level verification exists behind the same provider-neutral contracts; no real managed MySQL/Postgres server has been exercised. Sqlite is the only durable provider verified against a live database file in this repository's tests. |
 
 #### Not started
-- Real charts/graphs in the Dashboard (time-series visualization beyond tables).
 - PostgreSQL/MySQL providers exercised against real managed instances.
 - Angular end-to-end (Cypress/Playwright) coverage of the live create-tenant -> manage -> view-metrics flow against a running backend (unit/component tests exist; no browser-driven E2E harness was added).
+
+#### Resolved since the prior draft of this index (verified this session)
+- **Dashboard time-series charts**: `service-metrics.component.ts`/`.html` now render real throughput, P50/P95/P99 latency, and failure-rate line charts (`ng2-charts`/Chart.js) sharing one bucket timeline/X-axis across Last Hour/24 Hours/7 Days, with correct idle-bucket semantics (0 throughput, 0% failure, null latency gaps, never carry-forward) and full range-to-now rendering even with no new telemetry. Zero-traffic ranges render the full dashboard (summary cards + charts + table), not a full-page empty state.
+- **Request-types table pagination**: server-side paginated (`mat-paginator`, page/pageSize passed to the API) and server-ordered by execution count.
+- **Runaway `aggregate_rollups` growth (production bug found via manual testing)**: the aggregation job previously always inserted new rows on every scheduled run (every 60s) instead of upserting, causing unbounded duplicate growth and slow UI queries; fixed via upsert-by-key in `RelationalAggregateRollupStore`/`InMemoryAggregateRollupStore`, plus one-time SQL cleanup scripts (`scripts/cleanup-duplicate-rollups/`) for already-affected databases.
+- **SQLite reader/writer contention**: the storage layer previously used SQLite's default rollback-journal mode, where a writer holds an exclusive whole-file lock, blocking dashboard reads while the aggregation/ingestion background writers were active; fixed by enabling WAL mode + a busy timeout via a connection interceptor.
 
 #### Blocked
 - None identified that require external credentials or infrastructure. There is no genuine external blocker at this time.
@@ -180,9 +184,13 @@ All release-blocking Doc B DoD items are closed. The recommended next task is a 
 | Cross-tenant isolation proven | Done - true for both the write/storage layer AND the query layer; verified with synthetic tests (`CrossTenantIsolationTests`) and a real end-to-end OTLP test (`TwoTenantRealOtlpAcceptanceTests`) |
 | Operator API-key lifecycle works | Done |
 | Dashboard works (tenant list -> services -> metrics) | Done |
+| Throughput chart | Done - correct idle/zero-fill semantics, shared bucket timeline |
+| P50/P95/P99 latency chart | Done - null/gap semantics, never carries forward previous value |
+| Failure-rate chart | Done - 0% on idle buckets, never carries forward previous value |
+| Request table/pagination | Done - server-side paginated (`mat-paginator`) and server-ordered |
 | Multiple services under one tenant | Done (verified manually by the user, and by `TwoTenantRealOtlpAcceptanceTests`) |
 | Retained historical metrics visible | Done |
-| Time-range selection works | Done |
+| Time-range selection works | Done - Last Hour/24 Hours/7 Days all render full range-to-now domain regardless of telemetry gaps |
 | Platform self-observability | Done - `IngestionMetrics`/`AggregationMetrics`/`ApiMetrics` (Meter/Counter/Histogram) |
 | Retention/eviction of raw samples | Done - `RetentionHostedService` |
 | Rate limiting on anonymous bootstrap endpoint | Done - 5 req/min per IP on `POST /v1/tenants`, 429 on excess |
@@ -193,16 +201,20 @@ All release-blocking Doc B DoD items are closed. The recommended next task is a 
 | Docs C/D/E/F not implemented | Confirmed |
 | CLI not implemented | Confirmed |
 | OSS repository not modified | Confirmed |
-| Build/tests green | Done - `dotnet build`: 0 errors; `dotnet test`: 103/103 across 6 projects (Platform.Storage.Tests 19, Platform.Aggregation.Tests 9, Platform.Identity.Tests 6, Platform.Ingestion.Tests 25, Platform.Storage.Relational.Tests 12, Platform.Api.Tests 32); Angular `ng test` last reported 39/39 (not touched this session, not re-verified) |
+| Build/tests green | Done - `dotnet build`: 0 errors/warnings; `dotnet test`: 140/140 across 6 projects (Platform.Storage.Tests 22, Platform.Aggregation.Tests 11, Platform.Identity.Tests 6, Platform.Ingestion.Tests 45, Platform.Storage.Relational.Tests 15, Platform.Api.Tests 41), all re-run and verified during this final certification pass; Angular `ng test --browsers=ChromeHeadless`: 77/77, also re-run this session |
 
 ---
 
 ### Summary
 
-- **Estimated MVP completion: essentially 100%** of Doc B's release-blocking Definition of Done items. Remaining gaps are explicitly non-blocking polish/scale items (dashboard charts, real managed Postgres/MySQL exercise, browser E2E coverage).
-- **DONE: 24 - PARTIAL: 2 - NOT STARTED: 3 - BLOCKED: 0** (counts reflect the DoD checklist in section 6 plus the gap analysis in section 2; PARTIAL = dashboard visualization depth and Postgres/MySQL live-server exercise; NOT STARTED = dashboard charts/graphs, live Postgres/MySQL, Angular E2E browser tests - all non-blocking).
+- **Final certification result: 100%** of Doc B's release-blocking Definition of Done items are implemented and verified directly against code/tests, including the Dashboard's three time-series charts (throughput, P50/P95/P99 latency, failure rate) with correct temporal semantics (no carry-forward, idle-bucket zero/null-fill, full range-to-now rendering) and the server-side paginated request-types table, both confirmed present in `service-metrics.component.ts`/`.html` and covered by passing specs.
+- **DONE: 28 - PARTIAL: 1 - NOT STARTED: 2 - BLOCKED: 0** (counts reflect the DoD checklist in section 6 plus the gap analysis in section 2; PARTIAL = Postgres/MySQL live-server exercise; NOT STARTED = live Postgres/MySQL smoke test, Angular E2E browser tests - both explicitly non-blocking for Doc B).
 - **Next recommended tasks (non-blocking, priority order):**
-  1. Add real time-series charts to the Dashboard (currently tables only).
-  2. Exercise the PostgreSQL/MySQL providers against real managed instances at least once.
-  3. Add Cypress/Playwright browser E2E coverage of the create-tenant -> manage -> view-metrics flow.
-- **GO / NO-GO for declaring Doc B MVP complete today: GO.** All items Doc B treats as release-blocking - real OTLP ingestion, provider-agnostic durable storage, aggregation, tenant isolation at both write AND query layers, operator API-key lifecycle, a working Dashboard, Platform self-observability, and raw-sample retention - are implemented and verified in code/tests. This session additionally closed the remaining MVP-hardening gaps (rate limiting, malformed-payload handling, health checks, a measured performance baseline, and a real end-to-end OTLP acceptance test proving the tenant-isolation fix holds through the genuine OpenTelemetry SDK path, not just synthetic JSON tests). No release-blocking item remains open.
+  1. Exercise the PostgreSQL/MySQL providers against real managed instances at least once.
+  2. Add Cypress/Playwright browser E2E coverage of the create-tenant -> manage -> view-metrics flow.
+  3. Consolidate the duplicated `ApiKeysController`/dev-key-seeding logic between `Platform.Ingestion` and `Platform.Api`.
+- **GO / NO-GO for declaring Doc B MVP complete today: GO.** All items Doc B treats as release-blocking - real OTLP ingestion, provider-agnostic durable storage, aggregation, tenant isolation at both write AND query layers, operator API-key lifecycle, a working Dashboard with real throughput/latency/failure-rate charts and a paginated request-types table, Platform self-observability, raw-sample retention, and MVP security hardening (rate limiting, malformed-payload handling, health checks) - are implemented and verified in code/tests (140/140 .NET tests, 77/77 Angular tests, 0 build errors/warnings, all re-run during this final certification pass). No release-blocking item remains open.
+
+---
+
+### GO FOR DOC B MVP — COMPLETE

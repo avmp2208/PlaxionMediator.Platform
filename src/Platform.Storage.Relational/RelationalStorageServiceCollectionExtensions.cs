@@ -22,8 +22,12 @@ public static class RelationalStorageServiceCollectionExtensions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
+        // See SqlitePragmaConnectionInterceptor for why this is needed:
+        // without it, SQLite's default rollback-journal mode makes writers
+        // (ingestion, aggregation) block every reader (UI queries) for the
+        // duration of each write.
         services.AddDbContextFactory<PlatformDbContext>(options =>
-            options.UseSqlite(connectionString));
+            options.UseSqlite(connectionString).AddInterceptors(new SqlitePragmaConnectionInterceptor()));
 
         return services.AddPlatformRelationalStores();
     }

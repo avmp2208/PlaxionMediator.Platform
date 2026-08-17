@@ -28,13 +28,7 @@
     <h2>Failed to load metrics</h2>
     <p>Something went wrong while fetching telemetry for this service. Try again shortly.</p>
   </mat-card>
-} @else if (!viewModel || viewModel.overview.totalExecutions === 0) {
-  <mat-card class="empty-card">
-    <mat-icon class="empty-icon">insights</mat-icon>
-    <h2>No requests observed in this range</h2>
-    <p>Try a wider time range or verify the service is still reporting telemetry.</p>
-  </mat-card>
-} @else {
+} @else if (viewModel) {
   <div class="summary-grid">
     <mat-card class="summary-card">
       <span class="summary-label">Total executions</span>
@@ -42,15 +36,15 @@
     </mat-card>
     <mat-card class="summary-card">
       <span class="summary-label">P50 latency</span>
-      <span class="summary-value">{{ viewModel.overview.p50 | number: '1.0-1' }} ms</span>
+      <span class="summary-value">{{ viewModel.overview.p50 === null ? '—' : (viewModel.overview.p50 | number: '1.0-1') + ' ms' }}</span>
     </mat-card>
     <mat-card class="summary-card">
       <span class="summary-label">P95 latency</span>
-      <span class="summary-value">{{ viewModel.overview.p95 | number: '1.0-1' }} ms</span>
+      <span class="summary-value">{{ viewModel.overview.p95 === null ? '—' : (viewModel.overview.p95 | number: '1.0-1') + ' ms' }}</span>
     </mat-card>
     <mat-card class="summary-card">
       <span class="summary-label">P99 latency</span>
-      <span class="summary-value">{{ viewModel.overview.p99 | number: '1.0-1' }} ms</span>
+      <span class="summary-value">{{ viewModel.overview.p99 === null ? '—' : (viewModel.overview.p99 | number: '1.0-1') + ' ms' }}</span>
     </mat-card>
     <mat-card class="summary-card">
       <span class="summary-label">Failure rate</span>

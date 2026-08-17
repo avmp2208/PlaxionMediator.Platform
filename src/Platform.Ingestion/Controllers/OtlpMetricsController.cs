@@ -20,12 +20,18 @@ public sealed class OtlpMetricsController : ControllerBase
     private readonly IMetricSampleStore _store;
     private readonly IServiceCatalog _serviceCatalog;
     private readonly IngestionMetrics _metrics;
+    private readonly CumulativeMetricStateStore _cumulativeState;
 
-    public OtlpMetricsController(IMetricSampleStore store, IServiceCatalog serviceCatalog, IngestionMetrics metrics)
+    public OtlpMetricsController(
+        IMetricSampleStore store,
+        IServiceCatalog serviceCatalog,
+        IngestionMetrics metrics,
+        CumulativeMetricStateStore cumulativeState)
     {
         _store = store;
         _serviceCatalog = serviceCatalog;
         _metrics = metrics;
+        _cumulativeState = cumulativeState;
     }
 
     [HttpPost]
@@ -73,7 +79,7 @@ public sealed class OtlpMetricsController : ControllerBase
             IReadOnlyList<MetricSample> samples;
             try
             {
-                samples = OtlpMetricsMapper.Map(request, tenantId);
+                samples = OtlpMetricsMapper.Map(request, tenantId, _cumulativeState);
             }
             catch (ArgumentException ex)
             {

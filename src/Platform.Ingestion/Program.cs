@@ -20,6 +20,7 @@ builder.Services.Configure<FormOptions>(options =>
 builder.Services.AddControllers();
 builder.Services.AddPlatformStorage(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton<IngestionMetrics>();
+builder.Services.AddSingleton<CumulativeMetricStateStore>();
 builder.Services
     .AddAuthentication(ApiKeyAuthenticationDefaults.SchemeName)
     .AddScheme<ApiKeyAuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(

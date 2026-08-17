@@ -14,7 +14,7 @@ import 'chartjs-adapter-date-fns';
 import { PlatformApiService } from '../../core/platform-api.service';
 import { MetricPoint, RequestTypeRankingItem, ServiceSummary, TimeRange } from '../../core/models';
 import { buildMetricsViewModel, MetricsViewModel } from './metrics-view-model';
-import { AxisBounds, formatTickLabel, formatTooltipTimestamp, getAxisBounds } from './chart-time-axis';
+import { AxisBounds, formatTickLabel, formatTooltipTimestamp, getAxisBounds, getRangeBounds } from './chart-time-axis';
 
 // Chart library: ng2-charts (Chart.js wrapper). Chosen over ngx-charts/ApexCharts because it has
 // the smallest footprint, integrates trivially with standalone components via BaseChartDirective,
@@ -155,9 +155,16 @@ export class ServiceMetricsComponent implements OnInit {
     this.viewModel = undefined;
     this.resetCharts();
 
+    // Computed once per data-load: the range's fixed [start, now] window, which the view model uses
+    // to build a bucket grid that always spans through to the current time - not just to wherever
+    // the last received metric happens to be - and which the chart axis then renders against.
+    const now = new Date();
+    const { start } = getRangeBounds(this.range, now);
+    this.axisBounds = getAxisBounds(this.range, now);
+
     this.api.getServiceMetricsRaw(this.tenantId, this.serviceId, this.range).subscribe({
       next: (points: MetricPoint[]) => {
-        this.viewModel = buildMetricsViewModel(points);
+        this.viewModel = buildMetricsViewModel(points, { rangeStart: start, rangeEnd: now });
         this.renderCharts(this.viewModel);
         this.loading = false;
       },
@@ -196,10 +203,8 @@ export class ServiceMetricsComponent implements OnInit {
   }
 
   private renderCharts(vm: MetricsViewModel): void {
-    // Computed exactly once per data-load so every chart on the page shares an identical axis
-    // domain, instead of each chart independently calling `Date.now()` at slightly different times.
-    const now = new Date();
-    this.axisBounds = getAxisBounds(this.range, now);
+    // axisBounds was already computed once in loadMetrics (shared with the view-model's bucket
+    // grid), so every chart on the page shares an identical axis domain.
     const chartOptions = this.baseChartOptions();
     this.throughputChartOptions = chartOptions;
     this.latencyChartOptions = chartOptions;
@@ -213,19 +218,46 @@ export class ServiceMetricsComponent implements OnInit {
           borderColor: '#4fc3f7',
           backgroundColor: 'rgba(79, 195, 247, 0.2)',
           fill: true,
-          tension: 0.25
+          tension: 0.25,
+          // Throughput has no gaps (0 executions is a real value for every bucket), but spanGaps is
+          // set explicitly here for consistency with the other two charts.
+          spanGaps: false
         }
       ]
     };
 
+    // p50/p95/p99 are null for buckets with no duration observations - spanGaps: false ensures
+    // Chart.js renders those as a visible break in the line instead of interpolating/holding the
+    // previous value across the gap.
     this.latencyChartData = {
       datasets: [
-        { label: 'P50 (ms)', data: vm.latency.map(p => ({ x: p.time.getTime(), y: p.p50 })), borderColor: '#81c784', tension: 0.25 },
-        { label: 'P95 (ms)', data: vm.latency.map(p => ({ x: p.time.getTime(), y: p.p95 })), borderColor: '#ffb74d', tension: 0.25 },
-        { label: 'P99 (ms)', data: vm.latency.map(p => ({ x: p.time.getTime(), y: p.p99 })), borderColor: '#e57373', tension: 0.25 }
+        {
+          label: 'P50 (ms)',
+          data: vm.latency.map(p => ({ x: p.time.getTime(), y: p.p50 })),
+          borderColor: '#81c784',
+          tension: 0.25,
+          spanGaps: false
+        },
+        {
+          label: 'P95 (ms)',
+          data: vm.latency.map(p => ({ x: p.time.getTime(), y: p.p95 })),
+          borderColor: '#ffb74d',
+          tension: 0.25,
+          spanGaps: false
+        },
+        {
+          label: 'P99 (ms)',
+          data: vm.latency.map(p => ({ x: p.time.getTime(), y: p.p99 })),
+          borderColor: '#e57373',
+          tension: 0.25,
+          spanGaps: false
+        }
       ]
     };
 
+    // failureRatePercent is null for buckets with no executions - spanGaps: false ensures Chart.js
+    // renders those as a visible break in the line instead of interpolating/holding the previous
+    // failure rate across the gap (the exact bug this fix addresses).
     this.failureRateChartData = {
       datasets: [
         {
@@ -234,7 +266,8 @@ export class ServiceMetricsComponent implements OnInit {
           borderColor: '#e57373',
           backgroundColor: 'rgba(229, 115, 115, 0.2)',
           fill: true,
-          tension: 0.25
+          tension: 0.25,
+          spanGaps: false
         }
       ]
     };

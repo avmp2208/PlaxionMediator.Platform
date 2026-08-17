@@ -112,7 +112,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
 
 ## GO/NO-GO for Doc B MVP completion
 
-**GO.** See `docs/mvp/README.md` for the full, session-by-session reconciled Definition of Done checklist and rationale - it is the authoritative execution index and supersedes the "CONDITIONAL GO"/"IN PROGRESS" language previously in this section.
+**GO FOR DOC B MVP — COMPLETE.** See `docs/mvp/README.md` for the full, final-certification-verified Definition of Done checklist and rationale - it is the authoritative execution index. As of the final certification pass, the Dashboard's throughput/latency/failure-rate charts and paginated request-types table (previously tracked as gaps in this document) are confirmed implemented and test-covered, and all backend/frontend test suites are green (140/140 .NET, 77/77 Angular).
 
 Backend is onboardable end-to-end via API: durable shared SQLite, real
 OTLP/HTTP protobuf receiver, API-key auth + operator key lifecycle,

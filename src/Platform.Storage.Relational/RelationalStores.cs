@@ -149,31 +149,79 @@ public sealed class RelationalAggregateRollupStore : IAggregateRollupStore
 
     public async Task AddRangeAsync(IEnumerable<AggregateRollup> rollups, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        foreach (var rollup in rollups)
+        var rollupList = rollups is IReadOnlyCollection<AggregateRollup> collection ? collection : rollups.ToList();
+        if (rollupList.Count == 0)
         {
-            db.AggregateRollups.Add(new AggregateRollupEntity
+            return;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        // Every RunOnceAsync pass recomputes buckets from all raw samples still
+        // in the retention window, so the same (tenant, service, metric,
+        // request type, bucket) tuple is recomputed on every run. Without this
+        // upsert, each run would blindly INSERT a brand-new duplicate row for
+        // buckets that were already written by a previous run, causing
+        // unbounded row growth the longer the aggregation job stays running.
+        var tenantIds = rollupList.Select(r => r.TenantId).Distinct().ToList();
+        var bucketStarts = rollupList.Select(r => TimeMapping.ToUtcDateTime(r.BucketStart)).Distinct().ToList();
+
+        var existingRows = await db.AggregateRollups
+            .Where(e => tenantIds.Contains(e.TenantId) && bucketStarts.Contains(e.BucketStartUtc))
+            .ToListAsync(cancellationToken);
+
+        var existingByKey = existingRows.ToDictionary(RollupKey.FromEntity);
+
+        foreach (var rollup in rollupList)
+        {
+            var serviceId = ServiceIdGenerator.Compute(rollup.TenantId, rollup.ServiceName, rollup.Environment);
+            var bucketStartUtc = TimeMapping.ToUtcDateTime(rollup.BucketStart);
+            var key = new RollupKey(rollup.TenantId, serviceId, rollup.MetricName, rollup.RequestType, bucketStartUtc);
+
+            if (existingByKey.TryGetValue(key, out var existing))
             {
-                Id = rollup.Id,
-                TenantId = rollup.TenantId,
-                ServiceId = ServiceIdGenerator.Compute(rollup.TenantId, rollup.ServiceName, rollup.Environment),
-                ServiceName = rollup.ServiceName,
-                Environment = rollup.Environment,
-                MetricName = rollup.MetricName,
-                RequestType = rollup.RequestType,
-                BucketStartUtc = TimeMapping.ToUtcDateTime(rollup.BucketStart),
-                BucketEndUtc = TimeMapping.ToUtcDateTime(rollup.BucketEnd),
-                Count = rollup.Count,
-                Min = rollup.Min,
-                Max = rollup.Max,
-                Avg = rollup.Avg,
-                P50 = rollup.P50,
-                P95 = rollup.P95,
-                P99 = rollup.P99
-            });
+                existing.BucketEndUtc = TimeMapping.ToUtcDateTime(rollup.BucketEnd);
+                existing.Count = rollup.Count;
+                existing.Min = rollup.Min;
+                existing.Max = rollup.Max;
+                existing.Avg = rollup.Avg;
+                existing.P50 = rollup.P50;
+                existing.P95 = rollup.P95;
+                existing.P99 = rollup.P99;
+            }
+            else
+            {
+                var entity = new AggregateRollupEntity
+                {
+                    Id = rollup.Id,
+                    TenantId = rollup.TenantId,
+                    ServiceId = serviceId,
+                    ServiceName = rollup.ServiceName,
+                    Environment = rollup.Environment,
+                    MetricName = rollup.MetricName,
+                    RequestType = rollup.RequestType,
+                    BucketStartUtc = bucketStartUtc,
+                    BucketEndUtc = TimeMapping.ToUtcDateTime(rollup.BucketEnd),
+                    Count = rollup.Count,
+                    Min = rollup.Min,
+                    Max = rollup.Max,
+                    Avg = rollup.Avg,
+                    P50 = rollup.P50,
+                    P95 = rollup.P95,
+                    P99 = rollup.P99
+                };
+                db.AggregateRollups.Add(entity);
+                existingByKey[key] = entity;
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private readonly record struct RollupKey(Guid TenantId, Guid ServiceId, string MetricName, string? RequestType, DateTime BucketStartUtc)
+    {
+        public static RollupKey FromEntity(AggregateRollupEntity e) =>
+            new(e.TenantId, e.ServiceId, e.MetricName, e.RequestType, e.BucketStartUtc);
     }
 
     public async Task<IReadOnlyList<AggregateRollup>> QueryAsync(

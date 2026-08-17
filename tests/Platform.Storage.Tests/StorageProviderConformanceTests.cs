@@ -372,6 +372,74 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
+    [Fact]
+    public async Task AggregateRollup_SameBucketRecomputed_UpsertsInsteadOfDuplicating()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantId = Guid.NewGuid();
+            var serviceId = ServiceIdGenerator.Compute(tenantId, "checkout", "prod");
+            var now = DateTimeOffset.UtcNow;
+            var bucketStart = now.AddMinutes(-1);
+
+            // Simulates the aggregation job re-running against the same
+            // retention window and recomputing the same bucket: it must
+            // update the existing row instead of inserting a duplicate.
+            await handles.Rollups.AddRangeAsync(new[]
+            {
+                new AggregateRollup
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    ServiceName = "checkout",
+                    Environment = "prod",
+                    MetricName = "plaxionmediator.request.count",
+                    BucketStart = bucketStart,
+                    BucketEnd = now,
+                    Count = 5,
+                    Min = 1,
+                    Max = 1,
+                    Avg = 1,
+                    P50 = 1,
+                    P95 = 1,
+                    P99 = 1
+                }
+            });
+
+            await handles.Rollups.AddRangeAsync(new[]
+            {
+                new AggregateRollup
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    ServiceName = "checkout",
+                    Environment = "prod",
+                    MetricName = "plaxionmediator.request.count",
+                    BucketStart = bucketStart,
+                    BucketEnd = now,
+                    Count = 8,
+                    Min = 1,
+                    Max = 2,
+                    Avg = 1.5,
+                    P50 = 1,
+                    P95 = 2,
+                    P99 = 2
+                }
+            });
+
+            var results = await handles.Rollups.QueryAsync(tenantId, serviceId, bucketStart.AddMinutes(-1), now.AddMinutes(1));
+
+            Assert.Single(results);
+            Assert.Equal(8, results[0].Count);
+            Assert.Equal(2, results[0].Max);
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
     private static MetricSample NewSample(
         Guid tenantId,
         string service,

@@ -39,6 +39,15 @@ export function getAxisBounds(range: TimeRange, now: Date): AxisBounds {
   }
 }
 
+/**
+ * The fixed [start, end] window for a given range/`now` - `end` is always `now` itself, so the
+ * selected range keeps extending all the way to the current time rather than stopping at the
+ * timestamp of the last received metric.
+ */
+export function getRangeBounds(range: TimeRange, now: Date): { start: Date; end: Date } {
+  return { start: new Date(now.getTime() - RANGE_DURATION_MS[range]), end: now };
+}
+
 /** Compact axis tick label for a given range - full precision is reserved for tooltips. */
 export function formatTickLabel(date: Date, range: TimeRange): string {
   switch (range) {
