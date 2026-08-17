@@ -16,6 +16,10 @@ public static class OtlpMetricsMapper
     private const int MaxServiceNameLength = 256;
     private const int MaxSamplesPerRequest = 5_000;
     private const int MaxDistinctMetricNamesPerRequest = 200;
+    private const int MaxRequestTypeLength = 256;
+    private const int MaxDistinctRequestTypesPerRequest = 100;
+
+    private const string RequestTypeAttributeKey = "plaxionmediator.request.type";
 
     public static IReadOnlyList<MetricSample> Map(ExportMetricsServiceRequest request, Guid tenantId)
     {
@@ -23,6 +27,7 @@ public static class OtlpMetricsMapper
 
         var samples = new List<MetricSample>();
         var distinctNames = new HashSet<string>(StringComparer.Ordinal);
+        var distinctRequestTypes = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var resourceMetrics in request.ResourceMetrics)
         {
@@ -60,17 +65,18 @@ public static class OtlpMetricsMapper
                     switch (metric.DataCase)
                     {
                         case Metric.DataOneofCase.Gauge:
-                            AddNumberDataPoints(samples, tenantId, serviceName, environment, metric.Name, metric.Gauge.DataPoints);
+                            AddNumberDataPoints(samples, tenantId, serviceName, environment, metric.Name, metric.Gauge.DataPoints, distinctRequestTypes);
                             break;
                         case Metric.DataOneofCase.Sum:
-                            AddNumberDataPoints(samples, tenantId, serviceName, environment, metric.Name, metric.Sum.DataPoints);
+                            AddNumberDataPoints(samples, tenantId, serviceName, environment, metric.Name, metric.Sum.DataPoints, distinctRequestTypes);
                             break;
                         case Metric.DataOneofCase.Histogram:
                             foreach (var point in metric.Histogram.DataPoints)
                             {
                                 // Prefer the histogram sum when present; otherwise count.
                                 double value = point.HasSum ? point.Sum : point.Count;
-                                samples.Add(CreateSample(tenantId, serviceName, environment, metric.Name, value, point.TimeUnixNano));
+                                var requestType = ExtractRequestType(point.Attributes, distinctRequestTypes);
+                                samples.Add(CreateSample(tenantId, serviceName, environment, metric.Name, value, point.TimeUnixNano, requestType));
                                 EnsureSampleBudget(samples.Count);
                             }
 
@@ -80,7 +86,8 @@ public static class OtlpMetricsMapper
                             {
                                 // Summary always carries sum + count in the OTLP schema.
                                 double value = point.Sum != 0 ? point.Sum : point.Count;
-                                samples.Add(CreateSample(tenantId, serviceName, environment, metric.Name, value, point.TimeUnixNano));
+                                var requestType = ExtractRequestType(point.Attributes, distinctRequestTypes);
+                                samples.Add(CreateSample(tenantId, serviceName, environment, metric.Name, value, point.TimeUnixNano, requestType));
                                 EnsureSampleBudget(samples.Count);
                             }
 
@@ -89,7 +96,8 @@ public static class OtlpMetricsMapper
                             foreach (var point in metric.ExponentialHistogram.DataPoints)
                             {
                                 double value = point.HasSum ? point.Sum : point.Count;
-                                samples.Add(CreateSample(tenantId, serviceName, environment, metric.Name, value, point.TimeUnixNano));
+                                var requestType = ExtractRequestType(point.Attributes, distinctRequestTypes);
+                                samples.Add(CreateSample(tenantId, serviceName, environment, metric.Name, value, point.TimeUnixNano, requestType));
                                 EnsureSampleBudget(samples.Count);
                             }
 
@@ -113,7 +121,8 @@ public static class OtlpMetricsMapper
         string serviceName,
         string environment,
         string metricName,
-        IEnumerable<NumberDataPoint> points)
+        IEnumerable<NumberDataPoint> points,
+        HashSet<string> distinctRequestTypes)
     {
         foreach (var point in points)
         {
@@ -129,9 +138,33 @@ public static class OtlpMetricsMapper
                 throw new ArgumentException("Metric value must be a finite number.");
             }
 
-            samples.Add(CreateSample(tenantId, serviceName, environment, metricName, value, point.TimeUnixNano));
+            var requestType = ExtractRequestType(point.Attributes, distinctRequestTypes);
+            samples.Add(CreateSample(tenantId, serviceName, environment, metricName, value, point.TimeUnixNano, requestType));
             EnsureSampleBudget(samples.Count);
         }
+    }
+
+    private static string? ExtractRequestType(IEnumerable<KeyValue>? attributes, HashSet<string> distinctRequestTypes)
+    {
+        var requestType = GetAttribute(attributes, RequestTypeAttributeKey);
+        if (requestType is null)
+        {
+            return null;
+        }
+
+        if (requestType.Length > MaxRequestTypeLength)
+        {
+            throw new ArgumentException("RequestType exceeds maximum length.");
+        }
+
+        distinctRequestTypes.Add(requestType);
+        if (distinctRequestTypes.Count > MaxDistinctRequestTypesPerRequest)
+        {
+            throw new ArgumentException(
+                $"Request exceeds maximum of {MaxDistinctRequestTypesPerRequest} distinct request types (cardinality guard).");
+        }
+
+        return requestType;
     }
 
     private static void EnsureSampleBudget(int count)
@@ -149,7 +182,8 @@ public static class OtlpMetricsMapper
         string environment,
         string metricName,
         double value,
-        ulong timeUnixNano)
+        ulong timeUnixNano,
+        string? requestType = null)
     {
         if (timeUnixNano == 0)
         {
@@ -166,7 +200,8 @@ public static class OtlpMetricsMapper
             Environment = environment,
             MetricName = metricName,
             Value = value,
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ms)
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ms),
+            RequestType = requestType
         };
     }
 

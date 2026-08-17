@@ -27,6 +27,10 @@ Standard **OTLP/HTTP + protobuf** metrics export endpoint.
 Supported metric data cases: Gauge, Sum, Histogram, Summary, ExponentialHistogram
 (histograms/summaries map a representative numeric value — sum if present, else count).
 
+Additional cardinality guard: if a data point carries the `plaxionmediator.request.type` attribute
+(string value), it is extracted into `MetricSample.RequestType`; at most **100** distinct values
+are accepted per request and each value is capped at 256 chars — otherwise `400 Bad Request`.
+
 ### Client configuration (OpenTelemetry .NET)
 
 ```csharp
@@ -76,6 +80,7 @@ Validation rules (violations return `400 Bad Request`):
 - `metrics` must contain at least one entry and at most **5 000** points.
 - At most **200** distinct `metricName` values per request (cardinality guard).
 - Each `metricName` required, non-blank, max 256 chars (cardinality guard).
+- Optional `requestType` per point: at most **100** distinct values per request, max 256 chars each (cardinality guard); mirrors the `plaxionmediator.request.type` OTLP attribute for parity between the two ingestion paths.
 - Each `value` must be a finite number (no `NaN`/`Infinity`).
 - Each `timeUnixNano` must be a positive value.
 - `resource.environment` defaults to `"unknown"` if blank.
@@ -125,8 +130,46 @@ If `{id}` belongs to a different tenant (or doesn't exist), the endpoint returns
 
 `range` examples: `15m`, `1h`, `24h`, `7d` (default `1h`).
 
-Response `200 OK`: list of rollups, each with `bucketStart`, `bucketEnd`, `metricName`,
-`count`, `min`, `max`, `avg`, `p50`, `p95`, `p99`.
+Response `200 OK`: list of `MetricRollupResponse` rollups, each with:
+
+| Field | Type | Notes |
+|---|---|---|
+| `bucketStart` | `DateTimeOffset` | Inclusive start of the rollup bucket. |
+| `bucketEnd` | `DateTimeOffset` | Exclusive end of the rollup bucket. |
+| `metricName` | `string` | e.g. `plaxionmediator.request.count`, `plaxionmediator.request.duration`, `plaxionmediator.pipeline_exception.count`, or any app-specific metric name. |
+| `count` | `int` | Number of raw samples that fed this rollup. |
+| `min` / `max` / `avg` | `double` | Basic stats over the raw sample values in the bucket. |
+| `p50` / `p95` / `p99` | `double` | Nearest-rank percentiles over the raw sample values in the bucket. |
+| `requestType` | `string?` | Optional request-type dimension (the CLR request type name), populated only for `PlaxionMediator.OpenTelemetry` metrics (`plaxionmediator.request.count`, `.request.duration`, `.pipeline_exception.count`). `null` for metrics without this dimension (e.g. generic gauges/counters). |
+
+Rollups are **not** filtered/collapsed server-side by `requestType` — the response includes both
+the aggregate-without-request-type rows (when applicable) and any per-request-type rows for the
+same metric/bucket; the caller (dashboard) groups/filters client-side.
+
+### Deriving request-type dashboards from this endpoint
+With `requestType` present, a client can build, entirely from this one endpoint's response,
+tenant-scoped:
+- **Throughput over time**: group rows where `metricName == "plaxionmediator.request.count"` by
+  `bucketStart` (optionally further by `requestType`) and plot `count`/`sum` over time.
+- **Latency (P50/P95/P99) over time**: use rows where
+  `metricName == "plaxionmediator.request.duration"`, plotting `p50`/`p95`/`p99` over `bucketStart`,
+  optionally split by `requestType`.
+- **Failure/error rate**: for the same `requestType` + `bucketStart`, divide the rollup `count` for
+  `metricName == "plaxionmediator.pipeline_exception.count"` by the rollup `count` for
+  `metricName == "plaxionmediator.request.count"`. This metric-name-based join is correct as long as
+  the client matches on the full `(requestType, bucketStart)` key (both metrics are rolled up from the
+  same bucketing/grouping logic in `RollupAggregator`, so buckets line up exactly); if a bucket has
+  request-count rows but no exception rows for a given `requestType`, treat the failure rate as `0`,
+  not "unknown".
+- **Request-type ranking table**: group rows where `metricName == "plaxionmediator.request.count"` by
+  `requestType` over the selected range, summing `count` for "most active", and separately taking the
+  max `p95`/`p99` from `plaxionmediator.request.duration` rows per `requestType` for "slowest".
+
+**Known gap**: there is no handler-type (as opposed to request-type) dimension anywhere in the
+published `PlaxionMediator.OpenTelemetry` OSS package — all measurements are tagged only with
+`plaxionmediator.request.type` (the request CLR type name), never a handler identifier. Handler-level
+ranking is therefore not implementable without an upstream OSS change and is explicitly out of scope
+here.
 
 ---
 

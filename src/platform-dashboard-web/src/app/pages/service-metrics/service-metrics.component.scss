@@ -68,41 +68,104 @@
   }
 }
 
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  gap: 20px;
+.error-card {
+  border-color: var(--app-error, #e57373);
 }
 
-.metric-card {
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   padding: 16px;
-  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.metric-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
+.summary-label {
+  font-size: 0.75rem;
+  color: var(--app-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.summary-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  padding: 16px;
 
   h2 {
-    margin: 0;
+    margin: 0 0 12px;
     font-size: 1rem;
-    font-family: 'Roboto Mono', monospace;
   }
 }
 
-.unit-badge {
-  font-size: 0.7rem;
-  color: var(--app-text-secondary);
-  background: var(--app-surface-raised);
-  border-radius: 10px;
-  padding: 2px 8px;
+.chart-wrapper {
+  position: relative;
+  height: 260px;
+  width: 100%;
 }
 
-.metric-table {
+.no-failures-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  p {
+    color: var(--app-text-secondary);
+    margin: 0;
+  }
+}
+
+.ranking-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  padding: 16px;
+
+  h2 {
+    margin: 0 0 12px;
+    font-size: 1rem;
+  }
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.ranking-table {
   width: 100%;
+  min-width: 480px;
   background: transparent;
+}
+
+.table-loading-state {
+  padding: 24px 0;
+}
+
+.table-error-card {
+  padding: 24px;
+}
+
+.table-empty-note {
+  color: var(--app-text-secondary);
+  margin: 0;
+  padding: 16px 0;
 }

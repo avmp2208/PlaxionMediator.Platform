@@ -110,6 +110,56 @@ internal sealed class RelationalSchemaInitializer : IHostedService
         {
             LogBenignRace();
         }
+
+        // There is no EF Core migrations system in this project (schema is
+        // created via EnsureCreated only). EnsureCreated does NOT alter an
+        // already-existing table's columns, so a database file created by
+        // a previous build (before a new nullable column such as
+        // RequestType was added to the canonical model) will be missing
+        // that column and every query against it fails with
+        // "no such column" (SQLite) / equivalent errors on MySQL/Postgres.
+        // As a lightweight, migration-free remedy for the MVP, best-effort
+        // "add column if missing" statements are attempted here for every
+        // column that has been added after the initial schema. This is
+        // idempotent and safe to run on every startup.
+        await AddColumnIfMissingAsync(db, cancellationToken);
+    }
+
+    private async Task AddColumnIfMissingAsync(PlatformDbContext db, CancellationToken cancellationToken)
+    {
+        var statements = new[]
+        {
+            ("metric_samples", "RequestType", "TEXT"),
+            ("aggregate_rollups", "RequestType", "TEXT")
+        };
+
+        foreach (var (table, column, type) in statements)
+        {
+            try
+            {
+                // Postgres supports "ADD COLUMN IF NOT EXISTS" directly.
+                // SQLite/MySQL do not, so those rely on catching the
+                // "duplicate column" error below instead.
+                var sql = db.Database.IsNpgsql()
+                    ? $"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS \"{column}\" {type} NULL"
+                    : $"ALTER TABLE {table} ADD COLUMN {column} {type} NULL";
+
+                await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+            }
+            catch (SqliteException ex) when (ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
+            {
+                // Column already present; nothing to do.
+            }
+            catch (MySqlException ex) when (ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
+            {
+                // Column already present; nothing to do.
+            }
+            catch (PostgresException)
+            {
+                // IF NOT EXISTS above already makes this a no-op when present;
+                // swallow any remaining benign race/duplicate errors.
+            }
+        }
     }
 
     private void LogBenignRace() =>

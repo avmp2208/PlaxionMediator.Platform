@@ -37,9 +37,79 @@ To add a new environment:
 | `/` | **Landing page.** Lists all tenants created on this browser (`TenantRegistryService`), with a "Create Tenant" button and a "Manage" action per tenant. Empty state when no tenants exist yet. | `TenantRegistryService.tenants()` (local, no HTTP). |
 | `/login` | Fallback entry point: paste an existing tenant API key directly (also linked from `/` as "Already have an API key?"). Resolves the key's `TenantId` via `GET /v1/api-keys/whoami`, then navigates into the tenant. | `PlatformApiService.whoAmI()`. |
 | `/tenants/:tenantId/services` | Service list for the given tenant (reached via "Manage" on `/`). Requires an active session API key for this tenant (`authGuard`); the server independently rejects any mismatch between the key's tenant and the URL's `TenantId`. | `PlatformApiService.getServices(tenantId)`. |
-| `/tenants/:tenantId/services/:id` | Per-service metrics with `1h` / `24h` / `7d` range toggle, per-metric tables (avg/p50/p95/p99/min/max/count). Same auth requirements as the services list. | `PlatformApiService.getServiceMetrics(tenantId, id)`. |
+| `/tenants/:tenantId/services/:id` | **Status: Done.** Per-service metrics dashboard with `1h` / `24h` / `7d` range toggle: summary cards (total executions, P50/P95/P99, failure %, distinct request-type count), a throughput chart, a multi-line latency chart (P50/P95/P99), a failure-rate chart (or an explanatory note when no failures occurred in range), and a server-side-paginated request-type ranking table. Same auth requirements as the services list. | `PlatformApiService.getServiceMetricsRaw(tenantId, id, range)` (cards/charts) + `PlatformApiService.getRequestTypeRanking(tenantId, id, range, page, pageSize)` (table). |
 
 Loading, empty, and error states are handled for all HTTP calls.
+
+### Service metrics dashboard
+The per-service metrics page (`ServiceMetricsComponent`) consumes the raw rollup rows from
+`GET /v1/tenants/{tenantId}/services/{id}/metrics?range=...` (via `PlatformApiService.getServiceMetricsRaw`) and
+derives the summary cards and charts client-side through a pure transformation module,
+`src/app/pages/service-metrics/metrics-view-model.ts` (`buildMetricsViewModel`), which is unit-tested in isolation
+(`metrics-view-model.spec.ts`). The request-type ranking table is a separate, server-side-paginated data source (see
+below) and is no longer computed by this module.
+
+- **Failure rate** for a given `(requestType, bucket)` is `pipeline_exception.count` / `request.count` for that same
+  requestType+bucket; a missing exception row is treated as zero exceptions (not "unknown").
+- **Overall/per-bucket P50/P95/P99** are computed as a **count-weighted average** across the
+  contributing `request.duration` rows (documented inline in `metrics-view-model.ts`). This is the simplest
+  defensible aggregation that avoids "max of maxes" distortion while still weighting busier buckets/request types
+  more heavily.
+- The **failure-rate chart** is only rendered when there is at least one `pipeline_exception.count` row or a
+  non-zero failure rate in the selected range; otherwise a "No failures observed in this range" note is shown
+  instead of a flat, misleading zero-line chart.
+- Metrics with `requestType: null` (non-mediator-specific metrics) are excluded from the client-side charts described
+  above; they are out of scope for this dashboard.
+- **No fabricated data points**: `buildThroughput`/`buildLatency`/`buildFailureRate` in `metrics-view-model.ts` only
+  emit a point for buckets that actually have data - empty buckets are never zero-filled/interpolated. Combined with
+  the fixed chart axis domain described below, a sparse range (e.g. only 1-3 real data points) renders those points
+  at their correct real position within the full time axis, instead of stretching them to fill the chart.
+- **Known gap** (same as noted in the backend's own metrics documentation): the OSS mediator package does not emit
+  a handler-type dimension, only `requestType` — so there is no handler-level ranking or drill-down here, only
+  request-type. A request-type detail/drill-down view is intentionally out of scope for this iteration.
+
+**Chart library**: [`ng2-charts`](https://github.com/valor-software/ng2-charts) (Chart.js wrapper), chosen over
+`ngx-charts`/`ng-apexcharts` for its small footprint, trivial integration with standalone components via
+`BaseChartDirective`/`provideCharts`, and because Chart.js exposes simple, explicit per-chart color/grid/tooltip
+options that are easy to theme for this dark-mode-only UI (see `DARK_GRID_COLOR`/`DARK_TEXT_COLOR`/`DARK_TOOLTIP_BG`
+in `service-metrics.component.ts`) without defaulting to light-mode-oriented styling.
+
+**Status: Done.** Time-based X-axis (compact labels + fixed full-range domain). The throughput/latency/failure-rate
+charts use Chart.js's `type: 'time'` scale (via `chartjs-adapter-date-fns`, which pulls in `date-fns` as its date
+library) instead of a `category` scale, so the axis represents a genuine continuous time domain rather than shrinking
+to fit only the data points present. Axis bounds/tick config are computed by the pure helper
+`src/app/pages/service-metrics/chart-time-axis.ts` (unit-tested in `chart-time-axis.spec.ts`):
+
+| Range | Axis `min`/`max` | `time.unit` | `stepSize` | Tick label format |
+|---|---|---|---|---|
+| `1h` | `now - 1h` .. `now` | `minute` | 10 | `HH:mm` (24h, e.g. `14:05`) |
+| `24h` | `now - 24h` .. `now` | `hour` | 4 | `HH:mm` (24h, e.g. `14:00`) |
+| `7d` | `now - 7d` .. `now` | `day` | 1 | short month + day (e.g. `Aug 10`) |
+
+`now` is computed exactly once per data-load in `ServiceMetricsComponent.renderCharts` and shared across all three
+charts, so they always share an identical axis domain instead of each chart independently calling `Date.now()`.
+Ticks use `maxRotation: 0` and an explicit `maxTicksLimit` (in addition to `stepSize`) as a safety net against
+overlapping labels. Tooltips always show the full exact timestamp (`formatTooltipTimestamp`, e.g.
+`Aug 15, 2026, 14:23:07`) regardless of the axis tick compaction, plus the value(s) for that point.
+
+**Status: Done.** Server-side-paginated request-types table. The request-type ranking table is populated from
+`GET /v1/tenants/{tenantId}/services/{id}/request-types?range=1h|24h|7d&page=1&pageSize=20` via
+`PlatformApiService.getRequestTypeRanking(tenantId, id, range, page, pageSize)`, independently of the
+`/metrics`-driven summary cards/charts:
+- **Default page size is 20**, with selectable page-size options **20 / 50 / 100** via a Material `mat-paginator`
+  below the table (`length` bound to the response's `totalItems`).
+- **Ordering is server-determined** (`executionCount` descending, `requestType` ascending tie-break); the client no
+  longer sorts this table - the previous `matSort`-based client-side column sorting has been removed since it would
+  otherwise silently mis-order an already-paginated slice of data.
+- Changing the page or page size only re-fetches and re-renders the table (its own loading spinner/error state),
+  without re-fetching or re-rendering the cards/charts.
+- Changing the `1h`/`24h`/`7d` range resets the table back to page 1 and re-fetches both the `/metrics` data and the
+  `/request-types` data.
+- The table's loading/empty/error states are independent from the rest of the page: e.g. if `/request-types` fails
+  while `/metrics` succeeds, the cards/charts render normally and only the table area shows an error state (and
+  vice versa).
+- The previous client-side `buildRanking`/`RequestTypeRankingRow` in `metrics-view-model.ts` has been removed, since
+  the table's data source is now this paginated endpoint rather than a client-side aggregation of `/metrics` rows.
 
 ### Tenant-list-first flow
 The user lands on `/` first and sees the list of tenants (each meaning one API key/pk they created on this browser):

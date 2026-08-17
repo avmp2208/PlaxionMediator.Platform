@@ -72,4 +72,25 @@ describe('PlatformApiService', () => {
     expect(req.request.method).toBe('DELETE');
     req.flush(null, { status: 204, statusText: 'No Content' });
   });
+
+  it('should GET the paginated request-type ranking with range/page/pageSize params', () => {
+    const response = {
+      items: [{ requestType: 'TypeA', executionCount: 10, p95: 20, p99: 30, failurePercent: 0 }],
+      page: 1,
+      pageSize: 20,
+      totalItems: 1,
+      totalPages: 1
+    };
+
+    service.getRequestTypeRanking('tenant-1', 'service-1', '24h', 1, 20).subscribe((res) => expect(res).toEqual(response));
+
+    const req = httpMock.expectOne(
+      (r) => r.url === `${environment.apiBaseUrl}/v1/tenants/tenant-1/services/service-1/request-types`
+    );
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('range')).toBe('24h');
+    expect(req.request.params.get('page')).toBe('1');
+    expect(req.request.params.get('pageSize')).toBe('20');
+    req.flush(response);
+  });
 });

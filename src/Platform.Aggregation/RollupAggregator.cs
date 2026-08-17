@@ -24,6 +24,7 @@ public static class RollupAggregator
             s.ServiceName,
             s.Environment,
             s.MetricName,
+            s.RequestType,
             BucketStart = BucketStart(s.Timestamp, bucketSize)
         });
 
@@ -38,6 +39,7 @@ public static class RollupAggregator
                 ServiceName = group.Key.ServiceName,
                 Environment = group.Key.Environment,
                 MetricName = group.Key.MetricName,
+                RequestType = group.Key.RequestType,
                 BucketStart = group.Key.BucketStart,
                 BucketEnd = group.Key.BucketStart + bucketSize,
                 Count = values.Count,

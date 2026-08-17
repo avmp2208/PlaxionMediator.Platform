@@ -136,4 +136,79 @@ public class CrossTenantIsolationTests : IClassFixture<WebApplicationFactory<Pro
 
         Assert.Single(rollups!);
     }
+
+    [Fact]
+    public async Task GetMetrics_ResponseIncludesRequestTypeField()
+    {
+        var (clientA, tenantA, serviceA, _) = await SeedTenantWithServiceAsync("service-a-request-type");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var rollupStore = scope.ServiceProvider.GetRequiredService<IAggregateRollupStore>();
+            var now = DateTimeOffset.UtcNow;
+            await rollupStore.AddRangeAsync(new[]
+            {
+                new AggregateRollup
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantA,
+                    ServiceName = serviceA.Name,
+                    Environment = "prod",
+                    MetricName = "plaxionmediator.request.count",
+                    RequestType = "CreateOrderRequest",
+                    BucketStart = now.AddMinutes(-1),
+                    BucketEnd = now,
+                    Count = 3,
+                    Min = 1,
+                    Max = 1,
+                    Avg = 1,
+                    P50 = 1,
+                    P95 = 1,
+                    P99 = 1
+                }
+            });
+        }
+
+        var response = await clientA.GetAsync($"/v1/tenants/{tenantA}/services/{serviceA.Id}/metrics?range=1h");
+        response.EnsureSuccessStatusCode();
+        var rollups = await response.Content.ReadFromJsonAsync<List<MetricRollupResponse>>();
+
+        Assert.Contains(rollups!, r => r.MetricName == "plaxionmediator.request.count" && r.RequestType == "CreateOrderRequest");
+    }
+
+    [Fact]
+    public async Task GetRequestTypeRanking_NoApiKey_Returns401()
+    {
+        var (_, tenantA, serviceA, _) = await SeedTenantWithServiceAsync("service-ranking-no-key");
+        var anonymousClient = _factory.CreateClient();
+
+        var response = await anonymousClient.GetAsync($"/v1/tenants/{tenantA}/services/{serviceA.Id}/request-types?range=1h");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetRequestTypeRanking_TenantA_KeyCannotReadTenantB_EvenWithTenantBIdInUrl()
+    {
+        var (clientA, _, serviceAOwn, _) = await SeedTenantWithServiceAsync("service-a-ranking-cross");
+        var (_, tenantB, serviceB, _) = await SeedTenantWithServiceAsync("service-b-ranking-cross");
+
+        // Tenant A's API key against Tenant B's real TenantId + service id
+        // must resolve to "not found", never leaking Tenant B's ranking data.
+        var response = await clientA.GetAsync($"/v1/tenants/{tenantB}/services/{serviceB.Id}/request-types?range=1h");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        _ = serviceAOwn;
+    }
+
+    [Fact]
+    public async Task GetRequestTypeRanking_TenantB_CannotAccessTenantAService()
+    {
+        var (_, _, serviceA, _) = await SeedTenantWithServiceAsync("service-a-ranking");
+        var (clientB, tenantB, _, _) = await SeedTenantWithServiceAsync("service-b-ranking");
+
+        var response = await clientB.GetAsync($"/v1/tenants/{tenantB}/services/{serviceA.Id}/request-types?range=1h");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
 }

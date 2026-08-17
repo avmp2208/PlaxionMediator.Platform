@@ -309,6 +309,69 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
+    [Fact]
+    public async Task AggregateRollup_DifferentRequestTypes_AreNotOverwritten()
+    {
+        var handles = await CreateStoresAsync();
+        try
+        {
+            var tenantId = Guid.NewGuid();
+            var serviceId = ServiceIdGenerator.Compute(tenantId, "checkout", "prod");
+            var now = DateTimeOffset.UtcNow;
+            var bucketStart = now.AddMinutes(-1);
+
+            await handles.Rollups.AddRangeAsync(new[]
+            {
+                new AggregateRollup
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    ServiceName = "checkout",
+                    Environment = "prod",
+                    MetricName = "plaxionmediator.request.count",
+                    RequestType = "CreateOrderRequest",
+                    BucketStart = bucketStart,
+                    BucketEnd = now,
+                    Count = 5,
+                    Min = 1,
+                    Max = 1,
+                    Avg = 1,
+                    P50 = 1,
+                    P95 = 1,
+                    P99 = 1
+                },
+                new AggregateRollup
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    ServiceName = "checkout",
+                    Environment = "prod",
+                    MetricName = "plaxionmediator.request.count",
+                    RequestType = "GetOrderRequest",
+                    BucketStart = bucketStart,
+                    BucketEnd = now,
+                    Count = 7,
+                    Min = 1,
+                    Max = 1,
+                    Avg = 1,
+                    P50 = 1,
+                    P95 = 1,
+                    P99 = 1
+                }
+            });
+
+            var results = await handles.Rollups.QueryAsync(tenantId, serviceId, bucketStart.AddMinutes(-1), now.AddMinutes(1));
+
+            Assert.Equal(2, results.Count);
+            Assert.Contains(results, r => r.RequestType == "CreateOrderRequest" && r.Count == 5);
+            Assert.Contains(results, r => r.RequestType == "GetOrderRequest" && r.Count == 7);
+        }
+        finally
+        {
+            await DisposeStoresAsync(handles);
+        }
+    }
+
     private static MetricSample NewSample(
         Guid tenantId,
         string service,

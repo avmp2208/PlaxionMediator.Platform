@@ -38,6 +38,14 @@ public sealed class MetricSample
     public string MetricName { get; init; } = string.Empty;
     public double Value { get; init; }
     public DateTimeOffset Timestamp { get; init; }
+
+    /// <summary>
+    /// Optional request-type dimension (e.g. the CLR request type name),
+    /// currently populated only for PlaxionMediator.OpenTelemetry metrics
+    /// (plaxionmediator.request.count / .request.duration /
+    /// .pipeline_exception.count). Null for metrics without this dimension.
+    /// </summary>
+    public string? RequestType { get; init; }
 }
 
 /// <summary>
@@ -52,6 +60,15 @@ public sealed class AggregateRollup
     public string ServiceName { get; init; } = string.Empty;
     public string Environment { get; init; } = string.Empty;
     public string MetricName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Optional request-type dimension. Rollups are grouped per
+    /// (TenantId, ServiceName, Environment, MetricName, RequestType,
+    /// BucketStart). Null still rolls up together as before (backward
+    /// compatible with metrics that don't carry this dimension).
+    /// </summary>
+    public string? RequestType { get; init; }
+
     public DateTimeOffset BucketStart { get; init; }
     public DateTimeOffset BucketEnd { get; init; }
     public int Count { get; init; }

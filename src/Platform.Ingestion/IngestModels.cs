@@ -11,6 +11,12 @@ public sealed class IngestMetricPoint
     public string MetricName { get; set; } = string.Empty;
     public double Value { get; set; }
     public long TimeUnixNano { get; set; }
+
+    /// <summary>
+    /// Optional request-type dimension (e.g. plaxionmediator.request.type),
+    /// kept in sync with OtlpMetricsMapper for the real OTLP path.
+    /// </summary>
+    public string? RequestType { get; set; }
 }
 
 public sealed class IngestResource

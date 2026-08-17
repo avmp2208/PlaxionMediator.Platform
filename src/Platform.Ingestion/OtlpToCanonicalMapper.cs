@@ -8,6 +8,8 @@ public static class OtlpToCanonicalMapper
     private const int MaxServiceNameLength = 256;
     private const int MaxSamplesPerRequest = 5_000;
     private const int MaxDistinctMetricNamesPerRequest = 200;
+    private const int MaxRequestTypeLength = 256;
+    private const int MaxDistinctRequestTypesPerRequest = 100;
 
     /// <summary>
     /// Validates and maps an ingestion transport request into canonical
@@ -45,6 +47,7 @@ public static class OtlpToCanonicalMapper
             : request.Resource.Environment;
 
         var distinctNames = new HashSet<string>(StringComparer.Ordinal);
+        var distinctRequestTypes = new HashSet<string>(StringComparer.Ordinal);
         var result = new List<MetricSample>(request.Metrics.Count);
         foreach (var point in request.Metrics)
         {
@@ -75,6 +78,21 @@ public static class OtlpToCanonicalMapper
                     $"Request exceeds maximum of {MaxDistinctMetricNamesPerRequest} distinct metric names (cardinality guard).");
             }
 
+            if (point.RequestType is not null)
+            {
+                if (point.RequestType.Length > MaxRequestTypeLength)
+                {
+                    throw new ArgumentException("RequestType exceeds maximum length.");
+                }
+
+                distinctRequestTypes.Add(point.RequestType);
+                if (distinctRequestTypes.Count > MaxDistinctRequestTypesPerRequest)
+                {
+                    throw new ArgumentException(
+                        $"Request exceeds maximum of {MaxDistinctRequestTypesPerRequest} distinct request types (cardinality guard).");
+                }
+            }
+
             result.Add(new MetricSample
             {
                 Id = Guid.NewGuid(),
@@ -83,7 +101,8 @@ public static class OtlpToCanonicalMapper
                 Environment = environment,
                 MetricName = point.MetricName,
                 Value = point.Value,
-                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(point.TimeUnixNano / 1_000_000)
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(point.TimeUnixNano / 1_000_000),
+                RequestType = point.RequestType
             });
         }
 

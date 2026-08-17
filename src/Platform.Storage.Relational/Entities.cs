@@ -10,6 +10,7 @@ internal sealed class MetricSampleEntity
     public string ServiceName { get; set; } = string.Empty;
     public string Environment { get; set; } = string.Empty;
     public string MetricName { get; set; } = string.Empty;
+    public string? RequestType { get; set; }
     public double Value { get; set; }
     public DateTime TimestampUtc { get; set; }
 }
@@ -22,6 +23,7 @@ internal sealed class AggregateRollupEntity
     public string ServiceName { get; set; } = string.Empty;
     public string Environment { get; set; } = string.Empty;
     public string MetricName { get; set; } = string.Empty;
+    public string? RequestType { get; set; }
     public DateTime BucketStartUtc { get; set; }
     public DateTime BucketEndUtc { get; set; }
     public int Count { get; set; }

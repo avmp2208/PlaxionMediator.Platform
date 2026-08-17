@@ -17,6 +17,7 @@ export interface MetricPoint {
   p50: number;
   p95: number;
   p99: number;
+  requestType: string | null;
 }
 
 export interface MetricSeries {
@@ -46,6 +47,22 @@ export interface CreateApiKeyResponse {
   id: string;
   name: string;
   plaintextKey: string;
+}
+
+export interface RequestTypeRankingItem {
+  requestType: string;
+  executionCount: number;
+  p95: number;
+  p99: number;
+  failurePercent: number;
+}
+
+export interface PagedRequestTypeRankingResponse {
+  items: RequestTypeRankingItem[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
 }
 
 export interface TenantRegistryEntry {

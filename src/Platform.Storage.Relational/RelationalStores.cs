@@ -25,6 +25,7 @@ public sealed class RelationalMetricSampleStore : IMetricSampleStore
                 ServiceName = sample.ServiceName,
                 Environment = sample.Environment,
                 MetricName = sample.MetricName,
+                RequestType = sample.RequestType,
                 Value = sample.Value,
                 TimestampUtc = TimeMapping.ToUtcDateTime(sample.Timestamp)
             });
@@ -131,6 +132,7 @@ public sealed class RelationalMetricSampleStore : IMetricSampleStore
         ServiceName = e.ServiceName,
         Environment = e.Environment,
         MetricName = e.MetricName,
+        RequestType = e.RequestType,
         Value = e.Value,
         Timestamp = TimeMapping.ToOffset(e.TimestampUtc)
     };
@@ -158,6 +160,7 @@ public sealed class RelationalAggregateRollupStore : IAggregateRollupStore
                 ServiceName = rollup.ServiceName,
                 Environment = rollup.Environment,
                 MetricName = rollup.MetricName,
+                RequestType = rollup.RequestType,
                 BucketStartUtc = TimeMapping.ToUtcDateTime(rollup.BucketStart),
                 BucketEndUtc = TimeMapping.ToUtcDateTime(rollup.BucketEnd),
                 Count = rollup.Count,
@@ -199,6 +202,7 @@ public sealed class RelationalAggregateRollupStore : IAggregateRollupStore
             ServiceName = e.ServiceName,
             Environment = e.Environment,
             MetricName = e.MetricName,
+            RequestType = e.RequestType,
             BucketStart = TimeMapping.ToOffset(e.BucketStartUtc),
             BucketEnd = TimeMapping.ToOffset(e.BucketEndUtc),
             Count = e.Count,

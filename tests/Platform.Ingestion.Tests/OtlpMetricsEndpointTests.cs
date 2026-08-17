@@ -50,6 +50,34 @@ public class OtlpMetricsEndpointTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
+    public async Task Post_OtlpProtobufWithRequestTypeAttribute_PersistsRequestTypeOnRoundTrip()
+    {
+        var tenantId = Guid.NewGuid();
+        var (client, _) = await CreateAuthenticatedClientAsync(tenantId);
+
+        var request = BuildSimpleGaugeRequest("otlp-service", "staging", "plaxionmediator.request.count", 1);
+        request.ResourceMetrics[0].ScopeMetrics[0].Metrics[0].Gauge.DataPoints[0].Attributes.Add(
+            new OpenTelemetry.Proto.Common.V1.KeyValue
+            {
+                Key = "plaxionmediator.request.type",
+                Value = new OpenTelemetry.Proto.Common.V1.AnyValue { StringValue = "CreateOrderRequest" }
+            });
+
+        using var content = new ByteArrayContent(request.ToByteArray());
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/x-protobuf");
+
+        var response = await client.PostAsync("/v1/metrics", content);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IMetricSampleStore>();
+        var samples = await store.GetByTenantAsync(tenantId);
+        var sample = Assert.Single(samples);
+        Assert.Equal("plaxionmediator.request.count", sample.MetricName);
+        Assert.Equal("CreateOrderRequest", sample.RequestType);
+    }
+
+    [Fact]
     public async Task Post_MalformedOtlpProtobuf_ReturnsBadRequestNotServerError()
     {
         var tenantId = Guid.NewGuid();

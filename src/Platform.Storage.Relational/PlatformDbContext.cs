@@ -26,20 +26,22 @@ public sealed class PlatformDbContext : DbContext
             e.ToTable("metric_samples");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.TimestampUtc });
-            e.HasIndex(x => new { x.TenantId, x.ServiceName, x.MetricName });
+            e.HasIndex(x => new { x.TenantId, x.ServiceName, x.MetricName, x.RequestType });
             e.Property(x => x.ServiceName).HasMaxLength(256).IsRequired();
             e.Property(x => x.Environment).HasMaxLength(128).IsRequired();
             e.Property(x => x.MetricName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.RequestType).HasMaxLength(256);
         });
 
         modelBuilder.Entity<AggregateRollupEntity>(e =>
         {
             e.ToTable("aggregate_rollups");
             e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.TenantId, x.ServiceId, x.BucketStartUtc });
+            e.HasIndex(x => new { x.TenantId, x.ServiceId, x.BucketStartUtc, x.RequestType });
             e.Property(x => x.ServiceName).HasMaxLength(256).IsRequired();
             e.Property(x => x.Environment).HasMaxLength(128).IsRequired();
             e.Property(x => x.MetricName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.RequestType).HasMaxLength(256);
         });
 
         modelBuilder.Entity<ServiceEntity>(e =>

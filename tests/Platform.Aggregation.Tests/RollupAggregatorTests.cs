@@ -77,4 +77,48 @@ public class RollupAggregatorTests
         Assert.Equal(2, rollups.Count);
         Assert.All(rollups, r => Assert.Equal(1, r.Count));
     }
+
+    [Fact]
+    public void Compute_DifferentRequestTypes_ProducesSeparateRollups()
+    {
+        var tenantId = Guid.NewGuid();
+        var timestamp = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var samples = new List<MetricSample>
+        {
+            new()
+            {
+                TenantId = tenantId, ServiceName = "svc", Environment = "prod",
+                MetricName = "plaxionmediator.request.count", Value = 1, Timestamp = timestamp, RequestType = "CreateOrderRequest"
+            },
+            new()
+            {
+                TenantId = tenantId, ServiceName = "svc", Environment = "prod",
+                MetricName = "plaxionmediator.request.count", Value = 1, Timestamp = timestamp, RequestType = "GetOrderRequest"
+            }
+        };
+
+        var rollups = RollupAggregator.Compute(samples, TimeSpan.FromMinutes(1));
+
+        Assert.Equal(2, rollups.Count);
+        Assert.Contains(rollups, r => r.RequestType == "CreateOrderRequest" && r.Count == 1);
+        Assert.Contains(rollups, r => r.RequestType == "GetOrderRequest" && r.Count == 1);
+    }
+
+    [Fact]
+    public void Compute_NullRequestType_StillMergesIntoSingleRollup()
+    {
+        var tenantId = Guid.NewGuid();
+        var timestamp = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var samples = new List<MetricSample>
+        {
+            new() { TenantId = tenantId, ServiceName = "svc", Environment = "prod", MetricName = "m", Value = 1, Timestamp = timestamp, RequestType = null },
+            new() { TenantId = tenantId, ServiceName = "svc", Environment = "prod", MetricName = "m", Value = 2, Timestamp = timestamp, RequestType = null }
+        };
+
+        var rollups = RollupAggregator.Compute(samples, TimeSpan.FromMinutes(1));
+
+        var rollup = Assert.Single(rollups);
+        Assert.Null(rollup.RequestType);
+        Assert.Equal(2, rollup.Count);
+    }
 }

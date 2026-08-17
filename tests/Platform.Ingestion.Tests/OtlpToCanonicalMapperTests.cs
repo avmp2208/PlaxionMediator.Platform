@@ -128,4 +128,50 @@ public class OtlpToCanonicalMapperTests
 
         Assert.All(result, s => Assert.Equal(tenantId, s.TenantId));
     }
+
+    [Fact]
+    public void Map_PointWithRequestType_PopulatesRequestType()
+    {
+        var request = ValidRequest();
+        request.Metrics[0].RequestType = "CreateOrderRequest";
+
+        var result = OtlpToCanonicalMapper.Map(request, Guid.NewGuid());
+
+        Assert.Equal("CreateOrderRequest", result[0].RequestType);
+    }
+
+    [Fact]
+    public void Map_PointWithoutRequestType_LeavesRequestTypeNull()
+    {
+        var result = OtlpToCanonicalMapper.Map(ValidRequest(), Guid.NewGuid());
+
+        Assert.Null(result[0].RequestType);
+    }
+
+    [Fact]
+    public void Map_HighCardinalityRequestType_IsRejected()
+    {
+        var request = ValidRequest();
+        request.Metrics[0].RequestType = new string('x', 500);
+
+        Assert.Throws<ArgumentException>(() => OtlpToCanonicalMapper.Map(request, Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void Map_TooManyDistinctRequestTypes_IsRejected()
+    {
+        var request = ValidRequest();
+        request.Metrics = Enumerable.Range(0, 101)
+            .Select(i => new IngestMetricPoint
+            {
+                MetricName = "plaxionmediator.request.count",
+                Value = 1,
+                TimeUnixNano = 1_700_000_000_000_000_000,
+                RequestType = $"RequestType{i}"
+            })
+            .ToList();
+
+        var ex = Assert.Throws<ArgumentException>(() => OtlpToCanonicalMapper.Map(request, Guid.NewGuid()));
+        Assert.Contains("distinct request types", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

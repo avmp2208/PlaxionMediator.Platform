@@ -8,6 +8,7 @@ import {
   CreateTenantResponse,
   MetricPoint,
   MetricSeries,
+  PagedRequestTypeRankingResponse,
   ServiceSummary,
   TimeRange
 } from './models';
@@ -50,10 +51,32 @@ export class PlatformApiService {
   }
 
   getServiceMetrics(tenantId: string, serviceId: string, range: TimeRange): Observable<MetricSeries[]> {
+    return this.getServiceMetricsRaw(tenantId, serviceId, range).pipe(
+      map(points => this.groupMetrics(points))
+    );
+  }
+
+  /** Returns the raw rollup rows as returned by the API, without any grouping/aggregation applied. */
+  getServiceMetricsRaw(tenantId: string, serviceId: string, range: TimeRange): Observable<MetricPoint[]> {
     return this.http.get<MetricPoint[]>(`${this.baseUrl}/v1/tenants/${tenantId}/services/${serviceId}/metrics`, {
       params: { range }
-    }).pipe(
-      map(points => this.groupMetrics(points))
+    });
+  }
+
+  /**
+   * Server-side-paginated request-type ranking, ordered by the server (executionCount descending,
+   * requestType ascending tie-break). The frontend must not re-sort this data client-side.
+   */
+  getRequestTypeRanking(
+    tenantId: string,
+    serviceId: string,
+    range: TimeRange,
+    page: number,
+    pageSize: number
+  ): Observable<PagedRequestTypeRankingResponse> {
+    return this.http.get<PagedRequestTypeRankingResponse>(
+      `${this.baseUrl}/v1/tenants/${tenantId}/services/${serviceId}/request-types`,
+      { params: { range, page, pageSize } }
     );
   }
 
