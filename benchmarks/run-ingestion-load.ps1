@@ -31,14 +31,21 @@ param(
 
 Add-Type -AssemblyName System.Net.Http
 
-# Uses the deterministic Development-only dev API key that both
-# Platform.Ingestion and Platform.Api seed for DevTenant (see Program.cs in
-# each project). This script is meant to be run against local Development
-# instances only.
-$devApiKey = "pk_dev0000000000000000000000000000000000000000000000000000dev0"
+# There is no seeded/dev API key anymore - self-provision a fresh benchmark
+# tenant via the self-service POST /v1/tenants endpoint (served by
+# Platform.Api) and use the returned plaintext key for both ingestion and
+# the query call below.
+$bootstrapClient = New-Object System.Net.Http.HttpClient
+$tenantBody = @{ name = "bench-tenant-$([guid]::NewGuid())" } | ConvertTo-Json
+$tenantContent = New-Object System.Net.Http.StringContent($tenantBody, [System.Text.Encoding]::UTF8, "application/json")
+$tenantResp = $bootstrapClient.PostAsync("$ApiBaseUrl/v1/tenants", $tenantContent).GetAwaiter().GetResult()
+$tenantResp.EnsureSuccessStatusCode() | Out-Null
+$tenantJson = $tenantResp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+$benchApiKey = $tenantJson.plaintextKey
+$benchTenantId = $tenantJson.tenantId
 
 $httpClient = New-Object System.Net.Http.HttpClient
-$httpClient.DefaultRequestHeaders.Add("X-Api-Key", $devApiKey)
+$httpClient.DefaultRequestHeaders.Add("X-Api-Key", $benchApiKey)
 $httpClient.Timeout = [TimeSpan]::FromSeconds(30)
 
 $latenciesMs = New-Object System.Collections.Generic.List[double]
@@ -91,15 +98,13 @@ Write-Host "Throughput:      $([math]::Round($throughput, 1)) req/s"
 Write-Host "p50 latency (ms): $([math]::Round($p50, 2))"
 Write-Host "p95 latency (ms): $([math]::Round($p95, 2))"
 
-# One representative query call against Platform.Api, timed separately.
-# Uses the same dev-seeded DevTenant.Id that Platform.Api/Platform.Ingestion
-# both seed a matching API key for in Development.
+# One representative query call against Platform.Api, timed separately,
+# using the same self-provisioned benchmark tenant/key from above.
 try {
     $apiClient = New-Object System.Net.Http.HttpClient
-    $apiClient.DefaultRequestHeaders.Add("X-Api-Key", $devApiKey)
-    $devTenantId = "00000000-0000-0000-0000-000000000001"
+    $apiClient.DefaultRequestHeaders.Add("X-Api-Key", $benchApiKey)
     $qsw = [System.Diagnostics.Stopwatch]::StartNew()
-    $servicesResp = $apiClient.GetAsync("$ApiBaseUrl/v1/tenants/$devTenantId/services").GetAwaiter().GetResult()
+    $servicesResp = $apiClient.GetAsync("$ApiBaseUrl/v1/tenants/$benchTenantId/services").GetAwaiter().GetResult()
     $qsw.Stop()
     Write-Host ""
     Write-Host "=== Platform.Api GET /v1/tenants/{id}/services ==="

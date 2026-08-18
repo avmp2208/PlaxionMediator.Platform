@@ -21,4 +21,11 @@ public class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var response = await _client.GetAsync(path);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Readiness_ReturnsOk_ForDefaultInMemoryHost()
+    {
+        var response = await _client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 }

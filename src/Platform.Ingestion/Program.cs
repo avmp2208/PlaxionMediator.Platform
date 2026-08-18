@@ -1,13 +1,20 @@
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Features;
 using Platform.Hosting;
+using Platform.Hosting.Configuration;
 using Platform.Identity;
 using Platform.Ingestion;
-using Platform.Storage;
+using Platform.Storage.Relational;
+using Platform.Storage.Relational.Health;
 
+var migrateOnly = MigrateCommand.IsMigrateOnly(args);
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddPlatformOptions(builder.Configuration);
+
 // Ingest payload guardrail (OTLP protobuf + JSON bridge).
-const long maxRequestBodyBytes = 1_048_576; // 1 MiB
+var maxRequestBodyBytes = builder.Configuration.GetSection(IngestionOptions.SectionName)
+    .GetValue<long?>("MaxRequestSizeBytes") ?? 1_048_576L;
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Limits.MaxRequestBodySize = maxRequestBodyBytes;
@@ -27,19 +34,28 @@ builder.Services
         ApiKeyAuthenticationDefaults.SchemeName, _ => { });
 builder.Services.AddAuthorization();
 builder.Services.AddOpenApi();
-builder.Services.AddHealthChecks();
+
+builder.Services.AddHealthChecks()
+    .AddPlatformStorageHealthChecks();
 
 var app = builder.Build();
 
-// Local-dev only: seed a deterministic API key bound to DevTenant so a
-// developer can call /v1/ingest without first provisioning a real key.
-// DevTenant.Id is never accepted directly from ingestion requests - it is
-// only ever reached through this seeded, hashed API key.
-// The plaintext itself is fixed (not randomly generated) so it survives
-// process restarts of the in-memory dev store - otherwise a key copied
-// into a sample app becomes invalid on every restart. This is a
-// Development-only convenience; it is still written to a local file
-// (never logged) rather than checked into source.
+if (migrateOnly)
+{
+    var runner = app.Services.GetService<RelationalMigrationRunner>();
+    if (runner is null)
+    {
+        app.Logger.LogError(
+            "Cannot run --migrate: relational storage is not configured. " +
+            "Set Storage:Provider to Sqlite or PostgreSql and ConnectionStrings:Platform.");
+        return;
+    }
+
+    await runner.MigrateAsync();
+    app.Logger.LogInformation("Migration job finished; exiting.");
+    return;
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -48,55 +64,39 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
-app.MapHealthChecks("/healthz");
+// Liveness
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false });
+// Readiness
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var payload = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description
+            })
+        };
+        await context.Response.WriteAsJsonAsync(payload);
+    }
+});
 app.MapControllers();
 
-// Start hosted services (including the storage provider's schema
-// initializer, e.g. SqliteSchemaInitializer) BEFORE seeding the dev API
-// key below. app.Run() alone would not guarantee hosted services have
-// finished StartAsync yet, causing "no such table" failures against a
-// durable provider the first time it runs against an empty database.
+// Start hosted services (including the storage provider's schema initializer).
 await app.StartAsync();
 
-if (app.Environment.IsDevelopment())
-{
-    const string devPlaintextKey = "pk_dev0000000000000000000000000000000000000000000000000000dev0";
-    var apiKeyService = app.Services.GetRequiredService<ApiKeyService>();
-
-    // Idempotent: with a durable provider (e.g. SQLite) this seed runs on
-    // every process restart, so skip re-creating the key once it exists
-    // rather than inserting a duplicate row each time.
-    var existing = await apiKeyService.ListAsync(DevTenant.Id);
-    if (!existing.Any(k => k.Name == "local-dev-seed"))
-    {
-        var seeded = await apiKeyService.CreateWithPlaintextAsync(DevTenant.Id, "local-dev-seed", devPlaintextKey);
-        var keyPath = Path.Combine(app.Environment.ContentRootPath, ".dev-api-key");
-        try
-        {
-            // Best-effort: parallel WebApplicationFactory hosts (tests) may race on this path.
-            await using var stream = new FileStream(
-                keyPath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.ReadWrite);
-            await using var writer = new StreamWriter(stream);
-            await writer.WriteAsync(seeded.PlaintextKey);
-            app.Logger.LogInformation(
-                "Seeded local-dev API key for DevTenant. Plaintext written to {KeyPath} (dev-only; value is never logged).",
-                keyPath);
-        }
-        catch (IOException)
-        {
-            app.Logger.LogInformation(
-                "Seeded local-dev API key for DevTenant (plaintext file unavailable due to concurrent access; value is never logged).");
-        }
-    }
-    else
-    {
-        app.Logger.LogInformation("Local-dev API key for DevTenant already seeded; skipping.");
-    }
-}
+var schemaStatus = app.Services.GetService<RelationalSchemaOptions>() is { } schema
+    ? $"{schema.Provider}/{schema.Mode}"
+    : "InMemory";
+PlatformStartupDiagnostics.LogStartupSummary(
+    app.Logger, app.Environment, app.Configuration, schemaStatus);
 
 await app.WaitForShutdownAsync();
 

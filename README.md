@@ -43,7 +43,9 @@ dotnet run --project src/Platform.Ingestion   # http://localhost:5292
 dotnet run --project src/Platform.Api         # http://localhost:5095
 ```
 
-Local-dev API key (Development): `Get-Content src/Platform.Ingestion/.dev-api-key`
+API key (all environments, including local dev): create a tenant via
+`POST /v1/tenants` (also available from the Dashboard's landing page) — the
+response includes a `plaintextKey` shown once. There is no seeded/dev key.
 
 ## Running the Dashboard (Angular)
 

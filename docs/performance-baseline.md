@@ -22,8 +22,8 @@ rough, reproducible reference point for future comparisons.
 #### How to reproduce
 
 1. Build the solution: `dotnet build`
-2. Start Platform.Ingestion in Development mode (seeds the deterministic dev
-   API key and DevTenant) on port 5299:
+2. Start Platform.Ingestion in Development mode on port 5299 (the load script
+   self-provisions a benchmark tenant + API key via `POST /v1/tenants`):
    ```
    $env:ASPNETCORE_ENVIRONMENT="Development"
    dotnet run -c Release --project src/Platform.Ingestion --urls http://localhost:5299

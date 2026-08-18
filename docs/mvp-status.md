@@ -77,7 +77,7 @@ remains. See also `docs/storage-decision.md` and `docs/nuget-reconciliation.md`.
     `[RequestSizeLimit]`).
   - Cardinality guards: max 5 000 samples/request and max 200 distinct metric
     names/request (plus existing 256-char name limits).
-  - API-key plaintext never logged (dev seed writes to `.dev-api-key` file only).
+  - API-key plaintext never logged; there is no dev/seeded key - every tenant (incl. local dev) self-provisions via `POST /v1/tenants` (plaintext shown once).
   - `/health` and `/healthz` on Platform.Ingestion and Platform.Api.
 - Tests: **140 total, all green** (`dotnet build` + `dotnet test`, 0
   warnings/errors) — the .NET solution no longer includes a Dashboard test

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Platform.Storage;
 
 namespace Platform.Aggregation;
@@ -26,16 +27,35 @@ public sealed class AggregationHostedService : BackgroundService
         IAggregateRollupStore rollupStore,
         IServiceCatalog serviceCatalog,
         ILogger<AggregationHostedService> logger,
-        TimeSpan? interval = null,
-        TimeSpan? bucketSize = null,
+        IOptions<AggregationOptions>? options = null,
         AggregationMetrics? metrics = null)
     {
         _sampleStore = sampleStore;
         _rollupStore = rollupStore;
         _serviceCatalog = serviceCatalog;
         _logger = logger;
-        _interval = interval ?? TimeSpan.FromMinutes(1);
-        _bucketSize = bucketSize ?? TimeSpan.FromMinutes(1);
+        var value = options?.Value;
+        _interval = value is { Interval: var i } && i > TimeSpan.Zero ? i : TimeSpan.FromMinutes(1);
+        _bucketSize = value is { BucketSize: var b } && b > TimeSpan.Zero ? b : TimeSpan.FromMinutes(1);
+        _metrics = metrics ?? new AggregationMetrics();
+    }
+
+    /// <summary>Test-friendly constructor with explicit intervals.</summary>
+    public AggregationHostedService(
+        IMetricSampleStore sampleStore,
+        IAggregateRollupStore rollupStore,
+        IServiceCatalog serviceCatalog,
+        ILogger<AggregationHostedService> logger,
+        TimeSpan interval,
+        TimeSpan bucketSize,
+        AggregationMetrics? metrics = null)
+    {
+        _sampleStore = sampleStore;
+        _rollupStore = rollupStore;
+        _serviceCatalog = serviceCatalog;
+        _logger = logger;
+        _interval = interval <= TimeSpan.Zero ? TimeSpan.FromMinutes(1) : interval;
+        _bucketSize = bucketSize <= TimeSpan.Zero ? TimeSpan.FromMinutes(1) : bucketSize;
         _metrics = metrics ?? new AggregationMetrics();
     }
 

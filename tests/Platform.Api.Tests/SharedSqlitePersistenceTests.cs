@@ -3,11 +3,8 @@ extern alias IngestionHost;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Platform.Aggregation;
 using Platform.Api;
 using Platform.Identity;
@@ -62,7 +59,7 @@ public sealed class SharedSqlitePersistenceTests : IAsyncLifetime
         await using var ingestionFactory = new SqliteWebAppFactory<IngestionHost::Program>(_connectionString);
         await using var apiFactory = new SqliteWebAppFactory<Program>(_connectionString);
 
-        // Force hosts to start (schema init).
+        // Force hosts to start (schema init via migrations).
         _ = ingestionFactory.Server;
         _ = apiFactory.Server;
 
@@ -126,45 +123,15 @@ public sealed class SharedSqlitePersistenceTests : IAsyncLifetime
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Production");
-            builder.ConfigureTestServices(services =>
-            {
-                // Replace whatever storage Program.cs registered with a SQLite
-                // provider pointed at the shared file.
-                RemoveStorage(services);
-                services.AddPlatformSqliteStorage(_cs);
-                services.RemoveAll<ApiKeyService>();
-                services.AddSingleton<ApiKeyService>();
-            });
-        }
-
-        private static void RemoveStorage(IServiceCollection services)
-        {
-            var types = new[]
-            {
-                typeof(IMetricSampleStore),
-                typeof(IAggregateRollupStore),
-                typeof(IServiceCatalog),
-                typeof(IApiKeyStore),
-                typeof(IDbContextFactory<PlatformDbContext>),
-                typeof(PlatformDbContext)
-            };
-
-            var remove = services
-                .Where(d => types.Contains(d.ServiceType)
-                            || (d.ImplementationType is not null
-                                && d.ImplementationType.Namespace == "Platform.Storage.Relational")
-                            || d.ServiceType.FullName?.Contains("PlatformDbContext") == true
-                            || d.ServiceType.FullName?.Contains("SqliteSchemaInitializer") == true
-                            || (d.ImplementationType?.Name.Contains("SqliteSchemaInitializer") ?? false)
-                            || d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService)
-                               && (d.ImplementationType?.Name.Contains("Sqlite") ?? false))
-                .ToList();
-
-            foreach (var d in remove)
-            {
-                services.Remove(d);
-            }
+            // Testing host (Sqlite is a local/test-only durable provider - not
+            // permitted in Production/Staging/QA) with explicit durable Sqlite +
+            // auto-migrate for the test. Configuration must be set before
+            // Program runs AddPlatformStorage.
+            builder.UseEnvironment("Testing");
+            builder.UseSetting("Storage:Provider", "Sqlite");
+            builder.UseSetting("ConnectionStrings:Platform", _cs);
+            builder.UseSetting("Database:AutoMigrate", "true");
+            builder.UseSetting("Cors:AllowedOrigins:0", "http://localhost:4200");
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿{
+{
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
     "http": {
@@ -9,7 +9,8 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "Storage__Provider": "Sqlite",
-        "ConnectionStrings__Platform": "Data Source=C:\\Users\\Angel\\RiderProjects\\PlaxionMediator.Platform\\.data\\platform-dev.db"
+        "ConnectionStrings__Platform": "Data Source=.data/platform-dev.db",
+        "Database__AutoMigrate": "true"
       }
     }
   }

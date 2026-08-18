@@ -7,12 +7,14 @@
 normal OpenTelemetry .NET OTLP HTTP/protobuf exporter at Platform.Ingestion.
 
 ### 1. Obtain an API key
-- **Local Development:** run `Platform.Ingestion`; the seeded DevTenant key is written
-  to `src/Platform.Ingestion/.dev-api-key` (plaintext is **never** logged).
-  ```powershell
-  Get-Content src/Platform.Ingestion/.dev-api-key
-  ```
-- **Operator API:** with any valid tenant key, `POST /v1/api-keys` with `{ "name": "my-app" }` and save the returned `plaintextKey` (shown once).
+- **First time (any environment, including local dev):** `POST /v1/tenants` with
+  `{ "name": "my-org" }` (also reachable from the Dashboard's landing page) to
+  provision a brand-new tenant; the response includes a `plaintextKey` shown
+  **once** (never logged, never persisted in plaintext). There is no seeded/dev
+  API key anymore — every environment provisions its own key this way.
+- **Additional keys for an existing tenant:** with any valid tenant key,
+  `POST /v1/api-keys` with `{ "name": "my-app" }` and save the returned
+  `plaintextKey` (shown once).
 
 ### 2. Configure OpenTelemetry .NET
 

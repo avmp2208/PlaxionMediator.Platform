@@ -24,16 +24,15 @@ dotnet run --project src/Platform.Ingestion
 
 Default URL: `http://localhost:5292`.
 
-In the `Development` environment:
-- Storage defaults to **in-memory**.
-- `Program.cs` seeds a local-dev API key bound to `DevTenant` and writes the
-  plaintext to `src/Platform.Ingestion/.dev-api-key` (**never logged**).
+In the `Development` environment, storage defaults to **in-memory** (Sqlite is
+also allowed locally — see below). `InMemory` and `Sqlite` are
+**local-development-only** providers; Staging/QA/Production must use
+`PostgreSql` or `MySql` and fail fast at startup otherwise.
 
-```powershell
-Get-Content src/Platform.Ingestion/.dev-api-key
-```
-
-Use that key for `POST /v1/metrics` (OTLP) or `POST /v1/ingest` (JSON bridge).
+There is no seeded/dev API key. Provision a tenant + key first via
+`POST /v1/tenants` with `{ "name": "my-org" }` — the response includes a
+`plaintextKey` shown once (never logged, never persisted in plaintext). Use
+that key for `POST /v1/metrics` (OTLP) or `POST /v1/ingest` (JSON bridge).
 
 Health: `GET /health` or `GET /healthz`.
 

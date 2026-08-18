@@ -1,34 +1,39 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Platform.Aggregation;
 using Platform.Api;
 using Platform.Hosting;
+using Platform.Hosting.Configuration;
 using Platform.Identity;
-using Platform.Storage;
+using Platform.Storage.Relational;
+using Platform.Storage.Relational.Health;
+using CorsOptions = Platform.Hosting.Configuration.CorsOptions;
 
+var migrateOnly = MigrateCommand.IsMigrateOnly(args);
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddPlatformOptions(builder.Configuration);
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddPlatformStorage(builder.Configuration, builder.Environment);
 
-builder.Services.Configure<RetentionOptions>(builder.Configuration.GetSection("Retention"));
 builder.Services.AddSingleton<AggregationMetrics>();
 builder.Services.AddSingleton<ApiMetrics>();
-builder.Services.AddHostedService(sp =>
-    ActivatorUtilities.CreateInstance<AggregationHostedService>(sp));
+builder.Services.AddHostedService<AggregationHostedService>();
 // Runs after aggregation - each pass reads/aggregates ALL currently
 // available raw samples before any of them ever become old enough to be
 // evicted by this job, so rollups never depend on samples this job deletes.
-builder.Services.AddHostedService(sp =>
-    ActivatorUtilities.CreateInstance<RetentionHostedService>(sp));
+builder.Services.AddHostedService<RetentionHostedService>();
 
 builder.Services
     .AddAuthentication(ApiKeyAuthenticationDefaults.SchemeName)
     .AddScheme<ApiKeyAuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
         ApiKeyAuthenticationDefaults.SchemeName, _ => { });
 builder.Services.AddAuthorization();
-builder.Services.AddHealthChecks();
+
+builder.Services.AddHealthChecks()
+    .AddPlatformStorageHealthChecks();
 
 // Anti-abuse control for the anonymous POST /v1/tenants bootstrap endpoint:
 // there is no API key yet at that point, so the only practical throttle is
@@ -48,35 +53,22 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
-// var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-// if (allowedOrigins.Length == 0 && builder.Environment.IsDevelopment())
-// {
-//     // Local-dev default: appsettings.Development.json/launchSettings.json do
-//     // not currently set Cors:AllowedOrigins, which previously resulted in an
-//     // empty WithOrigins() call - i.e. NO origin allowed, causing the Angular
-//     // dashboard to fail every cross-origin request (including the anonymous
-//     // POST /v1/tenants) with a CORS error. Default to the standard `ng serve`
-//     // port plus a few other commonly-used local dev ports (`ng serve --port`
-//     // is often changed, e.g. to 4600, when multiple Angular apps run on one
-//     // machine) so local development works out of the box without needing to
-//     // chase down a CORS error every time the port differs. Production/
-//     // staging/qa must still set Cors:AllowedOrigins explicitly via
-//     // configuration - this fallback only applies in Development.
-//     allowedOrigins =
-//     [
-//         "http://localhost:4200",
-//         "http://localhost:4600",
-//         "https://localhost:4200",
-//         "https://localhost:4600"
-//     ];
-// }
-string[] allowedOrigins =
-[
-    "http://localhost:4200",
-    "http://localhost:4600",
-    "https://localhost:4200",
-    "https://localhost:4600"
-];
+var corsOptions = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>()
+                  ?? new CorsOptions();
+var allowedOrigins = corsOptions.AllowedOrigins ?? [];
+if (allowedOrigins.Length == 0 && builder.Environment.IsDevelopment())
+{
+    // Local-dev default so Angular ng serve works out of the box.
+    // Production/Staging must set Cors:AllowedOrigins explicitly.
+    allowedOrigins =
+    [
+        "http://localhost:4200",
+        "http://localhost:4600",
+        "https://localhost:4200",
+        "https://localhost:4600"
+    ];
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Angular", policy =>
@@ -90,25 +82,29 @@ builder.Services.AddCors(options =>
         }
         else
         {
-            policy.AllowAnyOrigin()
-                .AllowAnyHeader()
-                .AllowAnyMethod();
+            policy.SetIsOriginAllowed(_ => false);
         }
     });
 });
 
-
-
 var app = builder.Build();
 
-// Local-dev only: seed the SAME deterministic dev API key that
-// Platform.Ingestion seeds. In Development, each service defaults to its
-// own in-memory storage, so without this the key issued/seeded by
-// Ingestion would not exist in Api's store, and the Dashboard (which
-// authenticates against Api) would reject it as "Invalid or revoked API
-// key" even though it works fine against Ingestion. For true shared
-// multi-process persistence, configure the Sqlite storage provider
-// instead (see docs/local-dev-setup.md).
+if (migrateOnly)
+{
+    var runner = app.Services.GetService<RelationalMigrationRunner>();
+    if (runner is null)
+    {
+        app.Logger.LogError(
+            "Cannot run --migrate: relational storage is not configured. " +
+            "Set Storage:Provider to Sqlite or PostgreSql and ConnectionStrings:Platform.");
+        return;
+    }
+
+    await runner.MigrateAsync();
+    app.Logger.LogInformation("Migration job finished; exiting.");
+    return;
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -117,44 +113,43 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 // IMPORTANT: the policy above is registered with a NAME ("Angular") via
-// AddPolicy, not AddDefaultPolicy. Calling app.UseCors() with no argument
-// applies the *default* policy, which was never registered here - so the
-// CORS rules configured above were silently never applied, no matter what
-// origins/ports were listed. The policy name must be passed explicitly.
+// AddPolicy, not AddDefaultPolicy. The policy name must be passed explicitly.
 app.UseCors("Angular");
 app.UseRateLimiter();
 
-app.MapHealthChecks("/health");
-app.MapHealthChecks("/healthz");
+// Liveness: process is up (no dependency checks).
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false });
+// Readiness: can serve traffic (includes DB when relational storage is used).
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var payload = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description
+            })
+        };
+        await context.Response.WriteAsJsonAsync(payload);
+    }
+});
 app.MapControllers();
 
-// Start hosted services (including the storage provider's schema
-// initializer, e.g. SqliteSchemaInitializer) BEFORE seeding the dev API
-// key below. app.Run() alone would not guarantee hosted services have
-// finished StartAsync yet, causing "no such table" failures against a
-// durable provider the first time it runs against an empty database.
+// Start hosted services (including schema initializer).
 await app.StartAsync();
 
-if (app.Environment.IsDevelopment())
-{
-    const string devPlaintextKey = "pk_dev0000000000000000000000000000000000000000000000000000dev0";
-    var apiKeyService = app.Services.GetRequiredService<ApiKeyService>();
-
-    // Idempotent: with shared durable storage, Platform.Ingestion may have
-    // already seeded this exact key, and with a durable provider this also
-    // runs on every process restart - skip re-creating it once it exists.
-    var existing = await apiKeyService.ListAsync(DevTenant.Id);
-    if (!existing.Any(k => k.Name == "local-dev-seed"))
-    {
-        await apiKeyService.CreateWithPlaintextAsync(DevTenant.Id, "local-dev-seed", devPlaintextKey);
-        app.Logger.LogInformation(
-            "Seeded local-dev API key for DevTenant (dev-only; value is never logged).");
-    }
-    else
-    {
-        app.Logger.LogInformation("Local-dev API key for DevTenant already seeded; skipping.");
-    }
-}
+var schemaStatus = app.Services.GetService<RelationalSchemaOptions>() is { } schema
+    ? $"{schema.Provider}/{schema.Mode}"
+    : "InMemory";
+PlatformStartupDiagnostics.LogStartupSummary(
+    app.Logger, app.Environment, app.Configuration, schemaStatus);
 
 await app.WaitForShutdownAsync();
 

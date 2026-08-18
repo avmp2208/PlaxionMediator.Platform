@@ -24,7 +24,7 @@
 - `/v1/ingest` retained as documented dev/back-compat bridge.
 - Ingest body size limits (1 MiB) on `/v1/metrics` and `/v1/ingest`.
 - Cardinality guards (max samples + distinct metric names per request; name length caps).
-- API-key plaintext never written to logs (dev seed → `.dev-api-key` file only).
+- API-key plaintext never written to logs; every tenant (incl. local dev) self-provisions via `POST /v1/tenants` (plaintext returned once, never persisted).
 - Health endpoints `/health` and `/healthz` on Ingestion and Api.
 - Tenant-query isolation on the Dashboard-facing read endpoints: `GET /v1/tenants/{tenantId}/services`
   and `GET /v1/tenants/{tenantId}/services/{id}/metrics` require a valid `X-Api-Key` (`[Authorize]`)
