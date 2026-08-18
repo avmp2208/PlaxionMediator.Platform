@@ -3,6 +3,7 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 
 import { PlatformApiService } from './platform-api.service';
 import { environment } from '../../environments/environment';
+import { AppConfigService } from './app-config.service';
 
 describe('PlatformApiService', () => {
   let service: PlatformApiService;
@@ -10,7 +11,8 @@ describe('PlatformApiService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule]
+      imports: [HttpClientTestingModule],
+      providers: [AppConfigService, PlatformApiService]
     });
     service = TestBed.inject(PlatformApiService);
     httpMock = TestBed.inject(HttpTestingController);

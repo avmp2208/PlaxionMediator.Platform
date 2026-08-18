@@ -12,13 +12,16 @@ import {
   ServiceSummary,
   TimeRange
 } from './models';
-import { environment } from '../../environments/environment';
+import { AppConfigService } from './app-config.service';
 
 @Injectable({ providedIn: 'root' })
 export class PlatformApiService {
-  private readonly baseUrl = environment.apiBaseUrl;
+  private get baseUrl() { return this.config.apiBaseUrl; }
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly config: AppConfigService
+  ) {}
 
   getServices(tenantId: string): Observable<ServiceSummary[]> {
     return this.http.get<ServiceSummary[]>(`${this.baseUrl}/v1/tenants/${tenantId}/services`);

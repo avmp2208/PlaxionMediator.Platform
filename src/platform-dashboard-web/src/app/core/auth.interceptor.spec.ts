@@ -5,6 +5,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { authInterceptor } from './auth.interceptor';
 import { TenantSessionService } from './tenant-session.service';
 import { environment } from '../../environments/environment';
+import { AppConfigService } from './app-config.service';
 
 describe('authInterceptor', () => {
   let http: HttpClient;
@@ -14,6 +15,7 @@ describe('authInterceptor', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
+        AppConfigService,
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting()
       ]

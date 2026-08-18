@@ -117,6 +117,9 @@ app.UseAuthorization();
 app.UseCors("Angular");
 app.UseRateLimiter();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // Liveness: process is up (no dependency checks).
 app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false });
@@ -141,6 +144,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     }
 });
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 // Start hosted services (including schema initializer).
 await app.StartAsync();
