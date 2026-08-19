@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.17" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.17" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.17" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.17" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.17" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.17" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.17" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="9.0.17" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Platform.Aggregation\Platform.Aggregation.csproj" />
+    <ProjectReference Include="..\Platform.Storage\Platform.Storage.csproj" />
+    <ProjectReference Include="..\Platform.Storage.Relational\Platform.Storage.Relational.csproj" />
+    <ProjectReference Include="..\Platform.Identity\Platform.Identity.csproj" />
+  </ItemGroup>
+
+</Project>

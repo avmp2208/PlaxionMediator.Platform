@@ -1,0 +1,55 @@
+<div class="page-header">
+  <div>
+    <h1>Tenants</h1>
+    <p class="page-subtitle">API keys you've created on this browser, one per tenant.</p>
+  </div>
+  <button mat-flat-button color="primary" (click)="openCreateDialog()">
+    <mat-icon>add</mat-icon>
+    Create Tenant
+  </button>
+</div>
+
+@if (registry.tenants().length === 0) {
+  <mat-card class="empty-card">
+    <mat-icon class="empty-icon">apartment</mat-icon>
+    <h2>No tenants yet. Create one to get started.</h2>
+    <p>
+      Creating a tenant generates an API key you can share with the service that will send metrics.
+    </p>
+    <button mat-flat-button color="primary" (click)="openCreateDialog()">Create Tenant</button>
+  </mat-card>
+} @else {
+  <mat-card class="table-card">
+    <table mat-table [dataSource]="registry.tenants()" class="tenants-table">
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>Tenant</th>
+        <td mat-cell *matCellDef="let t">{{ t.tenantName }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="maskedKey">
+        <th mat-header-cell *matHeaderCellDef>API key</th>
+        <td mat-cell *matCellDef="let t">
+          <span class="key-chip" matTooltip="Key shown only once at creation">
+            <mat-icon>vpn_key</mat-icon>
+            {{ t.maskedKey }}
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="createdAt">
+        <th mat-header-cell *matHeaderCellDef>Created</th>
+        <td mat-cell *matCellDef="let t">{{ t.createdAt | date: 'short' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let t">
+          <button mat-button color="primary" (click)="manage(t)">Manage</button>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns" class="tenant-row"></tr>
+    </table>
+  </mat-card>
+}

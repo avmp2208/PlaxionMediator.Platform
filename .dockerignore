@@ -1,0 +1,17 @@
+**/.git
+**/.idea
+**/.junie
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/wwwroot
+docs
+tests
+benchmarks
+scripts
+*.sln.DotSettings.user
+.env
+.env.*
+!.env.example
+docker-compose.override.yml

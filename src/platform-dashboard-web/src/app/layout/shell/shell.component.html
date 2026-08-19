@@ -1,0 +1,30 @@
+<mat-sidenav-container class="shell-container">
+  <mat-sidenav mode="side" opened class="shell-sidenav">
+    <div class="brand">
+      <mat-icon class="brand-icon">hub</mat-icon>
+      <span class="brand-text">Platform</span>
+    </div>
+
+    <mat-nav-list>
+      <a mat-list-item (click)="switchTenant()">
+        <mat-icon matListItemIcon>apartment</mat-icon>
+        <span matListItemTitle>All Tenants</span>
+      </a>
+    </mat-nav-list>
+
+    <div class="sidenav-footer">
+      <span class="version-tag">MVP UI preview</span>
+    </div>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="shell-content">
+    <mat-toolbar class="shell-toolbar">
+      <span class="toolbar-title">Platform Dashboard</span>
+      <span class="spacer"></span>
+    </mat-toolbar>
+
+    <div class="shell-body">
+      <router-outlet></router-outlet>
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

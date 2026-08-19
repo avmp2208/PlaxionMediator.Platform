@@ -1,0 +1,81 @@
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+  }
+}
+
+.page-subtitle {
+  color: var(--app-text-secondary);
+  margin: 0;
+}
+
+.empty-card {
+  padding: 40px;
+  text-align: center;
+  background: var(--app-surface);
+  border: 1px dashed var(--app-border);
+
+  .empty-icon {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--app-text-secondary);
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+  }
+
+  p {
+    color: var(--app-text-secondary);
+    margin: 0 0 16px;
+  }
+}
+
+.table-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  padding: 0;
+  overflow: hidden;
+}
+
+.tenants-table {
+  width: 100%;
+  background: transparent;
+}
+
+.tenant-row:hover {
+  background: var(--app-surface-raised);
+}
+
+.key-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-text-secondary);
+  font-size: 0.85rem;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.fallback-link {
+  margin-top: 20px;
+  color: var(--app-text-secondary);
+  font-size: 0.85rem;
+
+  a {
+    color: var(--app-accent);
+  }
+}
