@@ -19,7 +19,7 @@ public abstract class StorageProviderConformanceTests
     protected virtual Task<StorageHandles?> RecreateStoresAsync(StorageHandles original) =>
         Task.FromResult<StorageHandles?>(null);
 
-    [Fact]
+    [SkippableFact]
     public async Task MetricSample_WriteRead_RoundTrips()
     {
         var handles = await CreateStoresAsync();
@@ -42,7 +42,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task MetricSample_TenantIsolation_TenantBCannotReadTenantA()
     {
         var handles = await CreateStoresAsync();
@@ -61,7 +61,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task MetricSample_TimeRangeFiltering()
     {
         var handles = await CreateStoresAsync();
@@ -83,7 +83,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task MetricSample_RespectsCancellation()
     {
         var handles = await CreateStoresAsync();
@@ -100,7 +100,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ServiceCatalog_GetOrCreate_List_AndCrossTenant()
     {
         var handles = await CreateStoresAsync();
@@ -123,7 +123,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task AggregateRollup_PersistsAndFiltersByTenantTimeRange()
     {
         var handles = await CreateStoresAsync();
@@ -165,7 +165,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task MetricSample_RestartPersistence_WhenSupported()
     {
         var handles = await CreateStoresAsync();
@@ -199,7 +199,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DeleteOlderThanAsync_RemovesExpired_KeepsNonExpired()
     {
         var handles = await CreateStoresAsync();
@@ -225,7 +225,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DeleteOlderThanAsync_PreservesTenantIsolation()
     {
         var handles = await CreateStoresAsync();
@@ -261,7 +261,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DeleteOlderThanAsync_DoesNotAffectAggregateRollups()
     {
         var handles = await CreateStoresAsync();
@@ -309,7 +309,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task AggregateRollup_DifferentRequestTypes_AreNotOverwritten()
     {
         var handles = await CreateStoresAsync();
@@ -372,7 +372,7 @@ public abstract class StorageProviderConformanceTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task AggregateRollup_SameBucketRecomputed_UpsertsInsteadOfDuplicating()
     {
         var handles = await CreateStoresAsync();

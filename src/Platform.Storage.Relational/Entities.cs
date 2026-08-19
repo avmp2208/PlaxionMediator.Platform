@@ -55,7 +55,20 @@ internal sealed class ApiKeyEntity
 
 internal static class TimeMapping
 {
-    public static DateTime ToUtcDateTime(DateTimeOffset value) => value.UtcDateTime;
+    // PostgreSQL's "timestamp" types only retain microsecond precision, while
+    // .NET DateTime/DateTimeOffset carry 100ns ticks. Without truncating here,
+    // a value computed in memory (full tick precision) would no longer equal
+    // the same value once round-tripped through Postgres, breaking equality
+    // comparisons/upserts that rely on matching timestamps (e.g. aggregate
+    // rollup bucket lookups). Truncate consistently so both sides agree.
+    private const long TicksPerMicrosecond = 10;
+
+    public static DateTime ToUtcDateTime(DateTimeOffset value)
+    {
+        var utc = value.UtcDateTime;
+        var truncatedTicks = utc.Ticks - (utc.Ticks % TicksPerMicrosecond);
+        return new DateTime(truncatedTicks, DateTimeKind.Utc);
+    }
 
     public static DateTimeOffset ToOffset(DateTime utc) =>
         new(DateTime.SpecifyKind(utc, DateTimeKind.Utc));

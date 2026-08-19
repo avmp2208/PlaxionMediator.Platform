@@ -13,15 +13,15 @@ public sealed class PostgreSqlConformanceTests : StorageProviderConformanceTests
 
     protected override async Task<StorageHandles> CreateStoresAsync()
     {
-        if (string.IsNullOrEmpty(_connectionString))
-        {
-            // We can't easily skip individual tests in this abstract suite without a skippable fact runner,
-            // so we provide a clear error message. In CI, this env var should be set.
-            throw new InvalidOperationException(
-                $"PostgreSql conformance tests require the '{ConnectionStringEnvVar}' environment variable to be set.");
-        }
+        // These tests require a real PostgreSQL instance, which isn't available
+        // in most local/CI environments (e.g. GitHub-hosted runners without a
+        // provisioned Postgres service). Rather than failing the build when the
+        // env var isn't set, dynamically skip the test via Xunit.SkippableFact.
+        Skip.If(
+            string.IsNullOrEmpty(_connectionString),
+            $"PostgreSql conformance tests require the '{ConnectionStringEnvVar}' environment variable to be set.");
 
-        return await CreateFromConnectionStringAsync(_connectionString, ensureCreated: true);
+        return await CreateFromConnectionStringAsync(_connectionString!, ensureCreated: true);
     }
 
     protected override async Task<StorageHandles?> RecreateStoresAsync(StorageHandles original)
