@@ -110,6 +110,14 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Explicit UseRouting() BEFORE UseAuthentication() is required here: since
+// UseAuthentication() is called explicitly (not left to ASP.NET Core's
+// implicit middleware insertion), the framework does NOT reliably guarantee
+// endpoint routing has already run by this point. Without an explicit
+// UseRouting() first, Context.GetEndpoint() inside ApiKeyAuthenticationHandler
+// can be null for every request, making the IAuthorizeData check there
+// unreliable and defeating the "NoResult() for anonymous endpoints" fix.
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 // IMPORTANT: the policy above is registered with a NAME ("Angular") via
