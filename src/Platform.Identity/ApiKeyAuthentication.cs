@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -42,6 +44,23 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
     {
         if (!Request.Headers.TryGetValue(ApiKeyAuthenticationDefaults.HeaderName, out var headerValues))
         {
+            // Authentication middleware runs the default scheme's handler for
+            // EVERY request (health probes, anonymous bootstrap, static
+            // files...), not just endpoints that actually require auth. For
+            // endpoints with no [Authorize]/authorization requirement,
+            // returning Fail() here would make the base AuthenticationHandler
+            // log a "was not authenticated" Information line on every probe -
+            // pure noise, drowning out real auth failures. NoResult() is the
+            // documented way to say "this handler has nothing to contribute"
+            // without triggering that log or affecting the request (an
+            // anonymous endpoint doesn't need a principal at all).
+            var endpoint = Context.GetEndpoint();
+            var requiresAuth = endpoint?.Metadata.GetMetadata<IAuthorizeData>() is not null;
+            if (!requiresAuth)
+            {
+                return AuthenticateResult.NoResult();
+            }
+
             return AuthenticateResult.Fail("Missing API key header.");
         }
 
