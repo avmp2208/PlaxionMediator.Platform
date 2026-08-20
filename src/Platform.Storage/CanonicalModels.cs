@@ -125,3 +125,39 @@ public sealed class TenantMembership
 
     public DateTimeOffset CreatedAt { get; init; }
 }
+
+/// <summary>
+/// Lifecycle status of a <see cref="TenantInvitation"/>.
+/// Pending invitations are claimable via JIT on authenticated tenant list;
+/// Claimed/Revoked are terminal.
+/// </summary>
+public enum TenantInvitationStatus
+{
+    Pending = 0,
+    Claimed = 1,
+    Revoked = 2
+}
+
+/// <summary>
+/// Email-based invitation to join a tenant as <see cref="TenantMembershipRole.Member"/>.
+/// No invitation emails are sent by the platform; claiming is JIT when the
+/// invitee authenticates with a matching email claim.
+/// </summary>
+public sealed class TenantInvitation
+{
+    public Guid Id { get; init; }
+    public Guid TenantId { get; init; }
+
+    /// <summary>Canonical email (trimmed + lowercased) used for matching.</summary>
+    public string NormalizedEmail { get; init; } = string.Empty;
+
+    public TenantInvitationStatus Status { get; init; }
+
+    public string CreatedByIssuer { get; init; } = string.Empty;
+    public string CreatedBySubject { get; init; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset? ClaimedAt { get; init; }
+    public string? ClaimedByIssuer { get; init; }
+    public string? ClaimedBySubject { get; init; }
+}

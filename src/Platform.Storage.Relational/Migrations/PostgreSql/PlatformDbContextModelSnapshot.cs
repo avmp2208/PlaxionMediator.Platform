@@ -193,6 +193,62 @@ namespace Platform.Storage.Relational.Migrations.PostgreSql
                     b.ToTable("services", (string)null);
                 });
 
+            modelBuilder.Entity("Platform.Storage.Relational.TenantInvitationEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClaimedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ClaimedByIssuer")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ClaimedBySubject")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByIssuer")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("CreatedBySubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedEmail");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "NormalizedEmail")
+                        .IsUnique()
+                        .HasFilter("Status = 'Pending'");
+
+                    b.ToTable("tenant_invitations", (string)null);
+                });
+
             modelBuilder.Entity("Platform.Storage.Relational.TenantMembershipEntity", b =>
                 {
                     b.Property<Guid>("Id")

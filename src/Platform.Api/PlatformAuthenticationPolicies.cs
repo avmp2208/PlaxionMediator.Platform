@@ -37,4 +37,12 @@ public static class PlatformAuthenticationPolicies
     /// When authentication is disabled the policy denies all callers.
     /// </summary>
     public const string PlatformAdministrator = "PlatformAdministrator";
+
+    /// <summary>
+    /// API-key management surface: authenticated via API key and/or JWT Bearer.
+    /// Owner checks for human JWT callers are enforced in the controller via
+    /// <c>ITenantAuthorizationService</c>; machine API-key callers are tenant-scoped
+    /// by the trusted tenant_id claim alone.
+    /// </summary>
+    public const string ApiKeyManagement = "ApiKeyManagement";
 }

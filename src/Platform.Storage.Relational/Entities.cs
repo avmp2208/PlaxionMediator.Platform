@@ -63,6 +63,20 @@ internal sealed class TenantMembershipEntity
     public DateTime CreatedAtUtc { get; set; }
 }
 
+internal sealed class TenantInvitationEntity
+{
+    public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+    public string NormalizedEmail { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string CreatedByIssuer { get; set; } = string.Empty;
+    public string CreatedBySubject { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? ClaimedAtUtc { get; set; }
+    public string? ClaimedByIssuer { get; set; }
+    public string? ClaimedBySubject { get; set; }
+}
+
 internal static class TimeMapping
 {
     // PostgreSQL's "timestamp" types only retain microsecond precision, while

@@ -457,3 +457,25 @@ public sealed class PlatformAdministratorOptionsValidator : IValidateOptions<Pla
         }
     }
 }
+
+/// <summary>
+/// Invitation / JIT-claim settings. Bound from "Authorization:Invitations".
+/// Email claim types are provider-neutral lists — no IdP-specific hardcoding
+/// beyond sensible OIDC defaults.
+/// </summary>
+public sealed class InvitationOptions
+{
+    public const string SectionName = "Authorization:Invitations";
+
+    /// <summary>
+    /// JWT claim types inspected (in order) for the invitee email used by
+    /// JIT claim on GET /v1/tenants. First non-empty value wins.
+    /// </summary>
+    public string[] EmailClaimTypes { get; set; } =
+    [
+        "email",
+        "emails",
+        "preferred_username",
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+    ];
+}

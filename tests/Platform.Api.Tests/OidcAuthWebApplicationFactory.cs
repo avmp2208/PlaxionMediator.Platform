@@ -82,6 +82,14 @@ public sealed class OidcAuthWebApplicationFactory : WebApplicationFactory<Progra
                     policy.RequireAuthenticatedUser();
                     policy.Requirements.Add(new PlatformAdministratorRequirement());
                 });
+
+                options.AddPolicy(PlatformAuthenticationPolicies.ApiKeyManagement, policy =>
+                {
+                    policy.AddAuthenticationSchemes(
+                        ApiKeyAuthenticationDefaults.SchemeName,
+                        testScheme);
+                    policy.RequireAuthenticatedUser();
+                });
             });
         });
     }
@@ -94,7 +102,8 @@ public sealed class OidcAuthWebApplicationFactory : WebApplicationFactory<Progra
         string issuer = "https://test-issuer/",
         string? role = null,
         string? claimType = null,
-        string? claimValue = null)
+        string? claimValue = null,
+        string? email = null)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.SubHeader, subject);
@@ -102,6 +111,11 @@ public sealed class OidcAuthWebApplicationFactory : WebApplicationFactory<Progra
         if (!string.IsNullOrWhiteSpace(role))
         {
             client.DefaultRequestHeaders.Add(TestAuthHandler.RoleHeader, role);
+        }
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            client.DefaultRequestHeaders.Add(TestAuthHandler.EmailHeader, email);
         }
 
         if (!string.IsNullOrWhiteSpace(claimType))

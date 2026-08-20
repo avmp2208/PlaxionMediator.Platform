@@ -8,11 +8,29 @@ namespace Platform.Storage;
 public sealed class InMemoryTenantMembershipStore : ITenantMembershipStore
 {
     private readonly ConcurrentDictionary<Guid, TenantMembership> _memberships = new();
+    private readonly object _gate = new();
 
     public Task AddAsync(TenantMembership membership, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _memberships[membership.Id] = membership;
+        lock (_gate)
+        {
+            var duplicate = _memberships.Values.Any(m =>
+                m.TenantId == membership.TenantId
+                && string.Equals(m.IdentityIssuer, membership.IdentityIssuer, StringComparison.Ordinal)
+                && string.Equals(m.IdentitySubject, membership.IdentitySubject, StringComparison.Ordinal));
+            if (duplicate)
+            {
+                throw new InvalidOperationException(
+                    "Membership already exists for this tenant and identity.");
+            }
+
+            if (!_memberships.TryAdd(membership.Id, membership))
+            {
+                throw new InvalidOperationException($"Membership '{membership.Id}' already exists.");
+            }
+        }
+
         return Task.CompletedTask;
     }
 

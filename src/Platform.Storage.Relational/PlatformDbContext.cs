@@ -19,6 +19,7 @@ public sealed class PlatformDbContext : DbContext
     internal DbSet<ServiceEntity> Services => Set<ServiceEntity>();
     internal DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
     internal DbSet<TenantMembershipEntity> TenantMemberships => Set<TenantMembershipEntity>();
+    internal DbSet<TenantInvitationEntity> TenantInvitations => Set<TenantInvitationEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -78,6 +79,25 @@ public sealed class PlatformDbContext : DbContext
             e.Property(x => x.IdentityIssuer).HasMaxLength(512).IsRequired();
             e.Property(x => x.IdentitySubject).HasMaxLength(256).IsRequired();
             e.Property(x => x.Role).HasMaxLength(64).IsRequired();
+        });
+
+        modelBuilder.Entity<TenantInvitationEntity>(e =>
+        {
+            e.ToTable("tenant_invitations");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.TenantId);
+            e.HasIndex(x => x.NormalizedEmail);
+            // One active Pending invitation per tenant+email. Claimed/Revoked
+            // rows are not constrained so history can accumulate.
+            e.HasIndex(x => new { x.TenantId, x.NormalizedEmail })
+                .IsUnique()
+                .HasFilter("Status = 'Pending'");
+            e.Property(x => x.NormalizedEmail).HasMaxLength(320).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            e.Property(x => x.CreatedByIssuer).HasMaxLength(512).IsRequired();
+            e.Property(x => x.CreatedBySubject).HasMaxLength(256).IsRequired();
+            e.Property(x => x.ClaimedByIssuer).HasMaxLength(512);
+            e.Property(x => x.ClaimedBySubject).HasMaxLength(256);
         });
     }
 }

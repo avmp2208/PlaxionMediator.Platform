@@ -26,11 +26,16 @@ public sealed class TenantsController : ControllerBase
 
     private readonly ApiKeyService _apiKeyService;
     private readonly ITenantMembershipStore _membershipStore;
+    private readonly IInvitationClaimService _invitationClaimService;
 
-    public TenantsController(ApiKeyService apiKeyService, ITenantMembershipStore membershipStore)
+    public TenantsController(
+        ApiKeyService apiKeyService,
+        ITenantMembershipStore membershipStore,
+        IInvitationClaimService invitationClaimService)
     {
         _apiKeyService = apiKeyService;
         _membershipStore = membershipStore;
+        _invitationClaimService = invitationClaimService;
     }
 
     public sealed record CreateTenantRequest(string Name);
@@ -39,8 +44,10 @@ public sealed class TenantsController : ControllerBase
 
     /// <summary>
     /// Lists tenants the authenticated OIDC caller belongs to (via
-    /// <see cref="ITenantMembershipStore"/>). JWT Bearer only — does not
-    /// change the anonymous/authenticated POST bootstrap contract.
+    /// <see cref="ITenantMembershipStore"/>). Before listing, JIT-claims any
+    /// Pending invitations matching the caller's configured email claim
+    /// (case-insensitive / normalized). Missing email claim skips claim
+    /// silently. JWT Bearer only — does not change the POST bootstrap contract.
     /// </summary>
     [HttpGet]
     [Authorize(Policy = PlatformAuthenticationPolicies.JwtBearer)]
@@ -50,6 +57,9 @@ public sealed class TenantsController : ControllerBase
         {
             return BadRequest(new { error = "Authenticated principal is missing required iss/sub claims." });
         }
+
+        // JIT claim: Pending invitations → Member membership, then list.
+        await _invitationClaimService.ClaimPendingAsync(User, cancellationToken);
 
         var memberships = await _membershipStore.ListByIdentityAsync(issuer, subject, cancellationToken);
         var response = memberships
