@@ -49,6 +49,8 @@ ScaffoldingReadMe.txt
 # Local-dev shared SQLite data directory (see launchSettings.json)
 .data/
 
+scripts/
+
 # Angular Dashboard (src/platform-dashboard-web) build/deps
 # (workspace also has its own .gitignore covering these)
 node_modules/

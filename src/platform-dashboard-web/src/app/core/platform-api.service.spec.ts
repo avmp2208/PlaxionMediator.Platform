@@ -107,4 +107,65 @@ describe('PlatformApiService', () => {
     expect(req.request.params.get('pageSize')).toBe('20');
     req.flush(response);
   });
+
+  it('should POST /v1/invitations with email and tenantIds', () => {
+    const response = {
+      invitations: [
+        {
+          id: 'i1',
+          tenantId: 't1',
+          email: 'a@b.com',
+          status: 'Pending',
+          createdAt: '2024-01-01T00:00:00Z',
+          claimedAt: null
+        }
+      ],
+      skippedTenantIds: []
+    };
+
+    service.createInvitations('a@b.com', ['t1', 't2']).subscribe((res) => expect(res).toEqual(response));
+
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/v1/invitations`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ email: 'a@b.com', tenantIds: ['t1', 't2'] });
+    req.flush(response);
+  });
+
+  it('should GET /v1/invitations?tenantId= when listing invitations', () => {
+    const response = [
+      {
+        id: 'i1',
+        tenantId: 't1',
+        email: 'a@b.com',
+        status: 'Pending',
+        createdAt: '2024-01-01T00:00:00Z',
+        claimedAt: null
+      }
+    ];
+
+    service.getInvitations('t1').subscribe((res) => expect(res).toEqual(response));
+
+    const req = httpMock.expectOne(
+      (r) => r.url === `${environment.apiBaseUrl}/v1/invitations` && r.params.get('tenantId') === 't1'
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush(response);
+  });
+
+  it('should POST /v1/invitations/{id}/revoke when revoking', () => {
+    const response = {
+      id: 'i1',
+      tenantId: 't1',
+      email: 'a@b.com',
+      status: 'Revoked',
+      createdAt: '2024-01-01T00:00:00Z',
+      claimedAt: null
+    };
+
+    service.revokeInvitation('i1').subscribe((res) => expect(res).toEqual(response));
+
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/v1/invitations/i1/revoke`);
+    expect(req.request.method).toBe('POST');
+    req.flush(response);
+  });
 });

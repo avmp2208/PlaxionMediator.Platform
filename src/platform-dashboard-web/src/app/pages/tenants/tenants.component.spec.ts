@@ -189,4 +189,78 @@ describe('TenantsComponent', () => {
     expect(dialogMock.open).not.toHaveBeenCalled();
     expect(navigateSpy).toHaveBeenCalledWith(['/tenants', 't-oidc', 'services']);
   });
+
+  it('shows Invitations nav for Owners and hides it for Members', () => {
+    authMock.authenticationEnabled = true;
+    authMock.hasValidAccessToken.and.returnValue(true);
+    apiMock.getTenants.and.returnValue(
+      of([{ tenantId: 't-owner', role: 'Owner', createdAt: '2024-01-01T00:00:00Z' }])
+    );
+
+    fixture = TestBed.createComponent(TenantsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(component.canManageInvitations()).toBeTrue();
+    let el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="invitations-nav"]')).not.toBeNull();
+    expect(el.textContent).toContain('Invitations');
+
+    apiMock.getTenants.and.returnValue(
+      of([{ tenantId: 't-member', role: 'Member', createdAt: '2024-01-01T00:00:00Z' }])
+    );
+    fixture = TestBed.createComponent(TenantsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(component.canManageInvitations()).toBeFalse();
+    el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="invitations-nav"]')).toBeNull();
+  });
+
+  it('loads newly claimed tenants on fresh GET /v1/tenants after login (JIT claim, no accept UI)', () => {
+    authMock.authenticationEnabled = true;
+    authMock.hasValidAccessToken.and.returnValue(true);
+    apiMock.getTenants.and.returnValue(
+      of([
+        { tenantId: 'claimed-1', role: 'Member', createdAt: '2024-06-01T00:00:00Z' },
+        { tenantId: 'owned-1', role: 'Owner', createdAt: '2024-01-01T00:00:00Z' }
+      ])
+    );
+
+    fixture = TestBed.createComponent(TenantsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(apiMock.getTenants).toHaveBeenCalled();
+    expect(component.serverTenants().map((t) => t.tenantId)).toEqual([
+      'claimed-1',
+      'owned-1'
+    ]);
+    expect(component.serverTenants().find((t) => t.tenantId === 'claimed-1')?.role).toBe('Member');
+
+    const text = (fixture.nativeElement as HTMLElement).textContent || '';
+    expect(text.toLowerCase()).not.toContain('accept invitation');
+    // Member still sees Open action for services.
+    expect(text).toContain('Open');
+  });
+
+  it('reloads tenants from the server on explicit refresh (no client cache of memberships)', () => {
+    authMock.authenticationEnabled = true;
+    authMock.hasValidAccessToken.and.returnValue(true);
+    apiMock.getTenants.and.returnValue(of([]));
+    fixture = TestBed.createComponent(TenantsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    const callsAfterInit = apiMock.getTenants.calls.count();
+
+    apiMock.getTenants.and.returnValue(
+      of([{ tenantId: 'new-claim', role: 'Member', createdAt: '2024-07-01T00:00:00Z' }])
+    );
+    component.reloadServerTenants();
+    fixture.detectChanges();
+
+    expect(apiMock.getTenants.calls.count()).toBeGreaterThan(callsAfterInit);
+    expect(component.serverTenants()[0].tenantId).toBe('new-claim');
+  });
 });
