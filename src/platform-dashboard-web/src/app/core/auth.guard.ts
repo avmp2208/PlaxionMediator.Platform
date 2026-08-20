@@ -1,19 +1,27 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { TenantSessionService } from './tenant-session.service';
+import { AuthService } from './auth.service';
 
 /**
- * Guards the services/metrics routes. These endpoints are now protected
- * server-side (see ServicesController/ServiceMetricsController in
- * Platform.Api) and require the tenant's own API key to be presented as
- * X-Api-Key - the TenantId route segment alone is never trusted. This
- * guard redirects home when there is no active session key for the
- * requested tenant, so the user is prompted to (re)supply the key via the
- * "Manage" flow instead of hitting a 401/404 from the API.
+ * Guards services/metrics routes.
+ *
+ * - OIDC enabled: require a valid access token; otherwise start login and cancel navigation.
+ * - OIDC disabled: preserve the legacy per-tenant API-key session check so local
+ *   anonymous bootstrap still works without an IdP.
  */
-export const authGuard: CanActivateFn = (route) => {
+export const authGuard: CanActivateFn = (route, state) => {
+  const auth = inject(AuthService);
   const session = inject(TenantSessionService);
   const router = inject(Router);
+
+  if (auth.authenticationEnabled) {
+    if (auth.hasValidAccessToken()) {
+      return true;
+    }
+    auth.login(state.url);
+    return false;
+  }
 
   const tenantId = route.paramMap.get('tenantId');
   if (tenantId && session.isActiveTenant(tenantId)) {

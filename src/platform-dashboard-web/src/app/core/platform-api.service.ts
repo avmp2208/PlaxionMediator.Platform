@@ -10,6 +10,7 @@ import {
   MetricSeries,
   PagedRequestTypeRankingResponse,
   ServiceSummary,
+  TenantListItem,
   TimeRange
 } from './models';
 import { AppConfigService } from './app-config.service';
@@ -25,6 +26,11 @@ export class PlatformApiService {
 
   getServices(tenantId: string): Observable<ServiceSummary[]> {
     return this.http.get<ServiceSummary[]>(`${this.baseUrl}/v1/tenants/${tenantId}/services`);
+  }
+
+  /** JWT-authenticated list of tenants the current user belongs to. */
+  getTenants(): Observable<TenantListItem[]> {
+    return this.http.get<TenantListItem[]>(`${this.baseUrl}/v1/tenants`);
   }
 
   createTenant(name: string): Observable<CreateTenantResponse> {

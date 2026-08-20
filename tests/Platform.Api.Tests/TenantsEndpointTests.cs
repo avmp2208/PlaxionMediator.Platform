@@ -8,8 +8,8 @@ using Xunit;
 namespace Platform.Api.Tests;
 
 /// <summary>
-/// Covers the anonymous self-service tenant bootstrap endpoint used by the
-/// Dashboard to provision a brand-new tenant + first API key.
+/// Covers the self-service tenant bootstrap endpoint and the JWT-backed
+/// tenant list used by the Dashboard landing page.
 /// </summary>
 public class TenantsEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
@@ -18,6 +18,56 @@ public class TenantsEndpointTests : IClassFixture<WebApplicationFactory<Program>
     public TenantsEndpointTests(WebApplicationFactory<Program> factory)
     {
         _factory = factory;
+    }
+
+    [Fact]
+    public async Task List_WithoutCredentials_IsDenied()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/v1/tenants");
+
+        // Auth disabled in default test host: JwtBearer policy denies (403).
+        // Auth enabled without credentials: challenge yields 401.
+        Assert.True(
+            response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
+            $"Expected 401/403 but got {(int)response.StatusCode} {response.StatusCode}");
+    }
+
+    [Fact]
+    public async Task List_AuthenticatedUser_ReturnsOnlyOwnMemberships()
+    {
+        await using var factory = new OidcAuthWebApplicationFactory();
+        var owner = factory.CreateAuthenticatedClient(subject: "list-owner", issuer: "https://test-issuer/");
+        var stranger = factory.CreateAuthenticatedClient(subject: "list-stranger", issuer: "https://test-issuer/");
+
+        var createA = await owner.PostAsJsonAsync("/v1/tenants", new TenantsController.CreateTenantRequest("Owner Tenant A"));
+        var createB = await owner.PostAsJsonAsync("/v1/tenants", new TenantsController.CreateTenantRequest("Owner Tenant B"));
+        createA.EnsureSuccessStatusCode();
+        createB.EnsureSuccessStatusCode();
+        var tenantA = await createA.Content.ReadFromJsonAsync<TenantsController.CreateTenantResponse>();
+        var tenantB = await createB.Content.ReadFromJsonAsync<TenantsController.CreateTenantResponse>();
+        Assert.NotNull(tenantA);
+        Assert.NotNull(tenantB);
+
+        // Unrelated user creates their own tenant — must not appear in owner's list.
+        var createOther = await stranger.PostAsJsonAsync("/v1/tenants", new TenantsController.CreateTenantRequest("Stranger Tenant"));
+        createOther.EnsureSuccessStatusCode();
+
+        var listResponse = await owner.GetAsync("/v1/tenants");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        var tenants = await listResponse.Content.ReadFromJsonAsync<List<TenantsController.TenantListItemResponse>>();
+        Assert.NotNull(tenants);
+        Assert.Equal(2, tenants!.Count);
+        Assert.Contains(tenants, t => t.TenantId == tenantA!.TenantId && t.Role == "Owner");
+        Assert.Contains(tenants, t => t.TenantId == tenantB!.TenantId && t.Role == "Owner");
+        Assert.DoesNotContain(tenants, t => t.TenantId != tenantA.TenantId && t.TenantId != tenantB.TenantId && t.Role == "Owner" && tenants.Count > 2);
+
+        var strangerList = await stranger.GetFromJsonAsync<List<TenantsController.TenantListItemResponse>>("/v1/tenants");
+        Assert.NotNull(strangerList);
+        Assert.Single(strangerList);
+        Assert.DoesNotContain(strangerList, t => t.TenantId == tenantA.TenantId || t.TenantId == tenantB.TenantId);
     }
 
     [Fact]

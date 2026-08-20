@@ -4,12 +4,12 @@ const STORAGE_KEY = 'platform.apiKey';
 const TENANT_ID_STORAGE_KEY = 'platform.apiKey.tenantId';
 
 /**
- * Holds the tenant's API key for the current browser session. Every
- * services/metrics request is gated server-side by [Authorize] +
- * TenantId-from-key validation (see ServicesController/
- * ServiceMetricsController in Platform.Api), so the active key here must
- * belong to the tenant being viewed - it is tracked alongside the key so
- * "Manage" can tell whether a re-prompt for the key is needed.
+ * Legacy (authentication.enabled = false) session helper: holds the tenant's
+ * API key for the current browser tab so Platform.Api calls can present
+ * X-Api-Key. When OIDC is enabled the Dashboard must NOT use this as its
+ * Platform.Api credential — AuthService + Bearer tokens replace it.
+ * The plaintext key may still be shown once after create for copy into
+ * telemetry-emitting apps; that is unrelated to this session store.
  */
 @Injectable({ providedIn: 'root' })
 export class TenantSessionService {

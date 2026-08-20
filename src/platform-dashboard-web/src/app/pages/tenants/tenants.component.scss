@@ -2,12 +2,26 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
 
   h1 {
     margin: 0 0 4px;
     font-size: 1.5rem;
   }
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.loading-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
 }
 
 .page-subtitle {

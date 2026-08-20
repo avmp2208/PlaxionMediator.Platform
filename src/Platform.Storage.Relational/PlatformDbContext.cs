@@ -18,6 +18,7 @@ public sealed class PlatformDbContext : DbContext
     internal DbSet<AggregateRollupEntity> AggregateRollups => Set<AggregateRollupEntity>();
     internal DbSet<ServiceEntity> Services => Set<ServiceEntity>();
     internal DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
+    internal DbSet<TenantMembershipEntity> TenantMemberships => Set<TenantMembershipEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,6 +66,18 @@ public sealed class PlatformDbContext : DbContext
             e.HasIndex(x => x.HashedKey);
             e.Property(x => x.Name).HasMaxLength(256).IsRequired();
             e.Property(x => x.HashedKey).HasMaxLength(128).IsRequired();
+        });
+
+        modelBuilder.Entity<TenantMembershipEntity>(e =>
+        {
+            e.ToTable("tenant_memberships");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.TenantId);
+            e.HasIndex(x => new { x.IdentityIssuer, x.IdentitySubject });
+            e.HasIndex(x => new { x.TenantId, x.IdentityIssuer, x.IdentitySubject }).IsUnique();
+            e.Property(x => x.IdentityIssuer).HasMaxLength(512).IsRequired();
+            e.Property(x => x.IdentitySubject).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Role).HasMaxLength(64).IsRequired();
         });
     }
 }

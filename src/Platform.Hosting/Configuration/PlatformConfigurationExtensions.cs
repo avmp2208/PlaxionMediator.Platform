@@ -53,6 +53,25 @@ public static class PlatformConfigurationExtensions
             .Bind(configuration.GetSection(SecurityOptions.SectionName))
             .ValidateOnStart();
 
+        services.AddOptions<AuthenticationOptions>()
+            .Bind(configuration.GetSection(AuthenticationOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AuthenticationOptions>, AuthenticationOptionsValidator>();
+
+        services.AddOptions<DashboardOptions>()
+            .Bind(configuration.GetSection(DashboardOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddOptions<TenantCreationOptions>()
+            .Bind(configuration.GetSection(TenantCreationOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<TenantCreationOptions>, TenantCreationOptionsValidator>();
+
+        services.AddOptions<PlatformAdministratorOptions>()
+            .Bind(configuration.GetSection(PlatformAdministratorOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<PlatformAdministratorOptions>, PlatformAdministratorOptionsValidator>();
+
         services.AddOptions<ObservabilityOptions>()
             .Bind(configuration.GetSection(ObservabilityOptions.SectionName))
             .ValidateOnStart();

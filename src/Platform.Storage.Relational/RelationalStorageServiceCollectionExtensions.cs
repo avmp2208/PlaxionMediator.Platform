@@ -94,6 +94,7 @@ public static class RelationalStorageServiceCollectionExtensions
         services.AddSingleton<IAggregateRollupStore, RelationalAggregateRollupStore>();
         services.AddSingleton<IServiceCatalog, RelationalServiceCatalog>();
         services.AddSingleton<IApiKeyStore, RelationalApiKeyStore>();
+        services.AddSingleton<ITenantMembershipStore, RelationalTenantMembershipStore>();
         services.AddHostedService<RelationalSchemaInitializer>();
         services.AddSingleton<RelationalMigrationRunner>();
 

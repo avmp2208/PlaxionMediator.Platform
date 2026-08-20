@@ -53,6 +53,16 @@ internal sealed class ApiKeyEntity
     public DateTime? RevokedAtUtc { get; set; }
 }
 
+internal sealed class TenantMembershipEntity
+{
+    public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+    public string IdentityIssuer { get; set; } = string.Empty;
+    public string IdentitySubject { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; }
+}
+
 internal static class TimeMapping
 {
     // PostgreSQL's "timestamp" types only retain microsecond precision, while

@@ -44,6 +44,18 @@ describe('PlatformApiService', () => {
     req.flush(response);
   });
 
+  it('should GET /v1/tenants when listing memberships', () => {
+    const response = [
+      { tenantId: 't1', role: 'Owner', createdAt: '2024-01-01T00:00:00Z' }
+    ];
+
+    service.getTenants().subscribe((res) => expect(res).toEqual(response));
+
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/v1/tenants`);
+    expect(req.request.method).toBe('GET');
+    req.flush(response);
+  });
+
   it('should GET /v1/api-keys when listing api keys', () => {
     const response = [
       { id: 'k1', name: 'default', createdAt: '2024-01-01T00:00:00Z', isActive: true, revokedAt: null }
