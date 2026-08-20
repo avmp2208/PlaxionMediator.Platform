@@ -18,6 +18,7 @@ public sealed class TestAuthHandler : AuthenticationHandler<AuthenticationScheme
     public const string SubHeader = "X-Test-Sub";
     public const string IssHeader = "X-Test-Iss";
     public const string RoleHeader = "X-Test-Role";
+    public const string EmailHeader = "X-Test-Email";
     public const string ClaimTypeHeader = "X-Test-Claim-Type";
     public const string ClaimValueHeader = "X-Test-Claim-Value";
 
@@ -62,6 +63,15 @@ public sealed class TestAuthHandler : AuthenticationHandler<AuthenticationScheme
                          .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+        }
+
+        if (Request.Headers.TryGetValue(EmailHeader, out var emailValues))
+        {
+            var email = emailValues.ToString();
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                claims.Add(new Claim("email", email));
             }
         }
 

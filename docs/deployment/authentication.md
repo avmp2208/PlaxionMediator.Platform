@@ -110,13 +110,18 @@ Access to specific tenants is managed via membership records in the platform sto
 | `IdentityIssuer` (`iss`) | The OIDC issuer that authenticated the user. |
 | `IdentitySubject` (`sub`) | The unique identifier for the user within that issuer. |
 | `TenantId` | The GUID of the tenant. |
-| `Role` | `Owner` or `Member`. |
+| `Role` | `Owner` or `Member` (platform-internal; **not** mapped from IdP roles). |
 
 ### Scoped Authorization
 When a user attempts to access a resource under `/v1/tenants/{tenantId}/...`, the platform:
 1.  Extracts the `iss` and `sub` claims from the JWT.
 2.  Looks for a matching membership record for that `tenantId`.
 3.  If no record is found, it returns **404 Not Found**. This applies to all tenant-scoped endpoints, including `/v1/tenants/{tenantId}/services` and `/v1/tenants/{tenantId}/metrics`.
+
+### Invitations and Owner/Member permissions
+Owners invite users by email (`POST /v1/invitations` with one or more `tenantIds`). The platform does **not** send email and has no separate accept step: invitees JIT-claim **Member** membership on `GET /v1/tenants` when their JWT email claim matches. See [Tenant Invitations and Platform Roles](../tenant-invitations-and-roles.md) for the full lifecycle, API shapes, and extensibility notes.
+
+IdP / `TenantCreation` roles only gate **tenant creation**. Losing an IdP role never removes an existing Owner/Member membership.
 
 ---
 

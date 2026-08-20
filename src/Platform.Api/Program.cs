@@ -74,6 +74,8 @@ if (authenticationOptions.Enabled)
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<PlatformAdministratorEvaluator>();
+builder.Services.AddSingleton<ITenantAuthorizationService, TenantAuthorizationService>();
+builder.Services.AddSingleton<IInvitationClaimService, InvitationClaimService>();
 builder.Services.AddSingleton<IAuthorizationHandler, TenantCreationAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, PlatformAdministratorAuthorizationHandler>();
@@ -142,6 +144,14 @@ builder.Services.AddAuthorization(options =>
         {
             policy.RequireAssertion(_ => false);
         }
+    });
+
+    // API key lifecycle: API-key machine principals and/or JWT humans.
+    // When OIDC is off, only the API-key scheme is registered (dev/bootstrap).
+    options.AddPolicy(PlatformAuthenticationPolicies.ApiKeyManagement, policy =>
+    {
+        policy.AddAuthenticationSchemes(tenantMemberSchemes.ToArray());
+        policy.RequireAuthenticatedUser();
     });
 });
 

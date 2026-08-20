@@ -72,6 +72,10 @@ public static class PlatformConfigurationExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<PlatformAdministratorOptions>, PlatformAdministratorOptionsValidator>();
 
+        services.AddOptions<InvitationOptions>()
+            .Bind(configuration.GetSection(InvitationOptions.SectionName))
+            .ValidateOnStart();
+
         services.AddOptions<ObservabilityOptions>()
             .Bind(configuration.GetSection(ObservabilityOptions.SectionName))
             .ValidateOnStart();

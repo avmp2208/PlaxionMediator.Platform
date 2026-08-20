@@ -425,7 +425,15 @@ public sealed class RelationalTenantMembershipStore : ITenantMembershipStore
             Role = membership.Role.ToString(),
             CreatedAtUtc = TimeMapping.ToUtcDateTime(membership.CreatedAt)
         });
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            throw new InvalidOperationException(
+                "Membership already exists for this tenant and identity.", ex);
+        }
     }
 
     public async Task<TenantMembership?> GetByIdAsync(Guid membershipId, CancellationToken cancellationToken = default)
@@ -487,5 +495,155 @@ public sealed class RelationalTenantMembershipStore : ITenantMembershipStore
             ? role
             : TenantMembershipRole.Member,
         CreatedAt = TimeMapping.ToOffset(e.CreatedAtUtc)
+    };
+
+    internal static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        // Provider-neutral: SQLite / Postgres / MySQL unique violations surface
+        // as DbUpdateException; message/inner text is the portable signal without
+        // taking a hard dependency on each provider's exception type here.
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+        {
+            var message = current.Message;
+            if (message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("1062", StringComparison.Ordinal)) // MySQL ER_DUP_ENTRY
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+public sealed class RelationalTenantInvitationStore : ITenantInvitationStore
+{
+    private readonly IDbContextFactory<PlatformDbContext> _dbFactory;
+
+    public RelationalTenantInvitationStore(IDbContextFactory<PlatformDbContext> dbFactory)
+    {
+        _dbFactory = dbFactory;
+    }
+
+    public async Task AddAsync(TenantInvitation invitation, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        db.TenantInvitations.Add(ToEntity(invitation));
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (RelationalTenantMembershipStore.IsUniqueConstraintViolation(ex))
+        {
+            throw new InvalidOperationException(
+                "A pending invitation already exists for this tenant and email.", ex);
+        }
+    }
+
+    public async Task<TenantInvitation?> GetByIdAsync(Guid invitationId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.TenantInvitations.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == invitationId, cancellationToken);
+        return entity is null ? null : Map(entity);
+    }
+
+    public async Task<TenantInvitation?> GetPendingAsync(
+        Guid tenantId,
+        string normalizedEmail,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.TenantInvitations.AsNoTracking()
+            .FirstOrDefaultAsync(
+                i => i.TenantId == tenantId
+                     && i.NormalizedEmail == normalizedEmail
+                     && i.Status == nameof(TenantInvitationStatus.Pending),
+                cancellationToken);
+        return entity is null ? null : Map(entity);
+    }
+
+    public async Task<IReadOnlyList<TenantInvitation>> ListByTenantAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.TenantInvitations.AsNoTracking()
+            .Where(i => i.TenantId == tenantId)
+            .OrderByDescending(i => i.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+        return rows.Select(Map).ToList();
+    }
+
+    public async Task<IReadOnlyList<TenantInvitation>> ListPendingByNormalizedEmailAsync(
+        string normalizedEmail,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.TenantInvitations.AsNoTracking()
+            .Where(i =>
+                i.NormalizedEmail == normalizedEmail
+                && i.Status == nameof(TenantInvitationStatus.Pending))
+            .OrderBy(i => i.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+        return rows.Select(Map).ToList();
+    }
+
+    public async Task UpdateAsync(TenantInvitation invitation, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.TenantInvitations
+            .FirstOrDefaultAsync(i => i.Id == invitation.Id, cancellationToken);
+        if (entity is null)
+        {
+            throw new InvalidOperationException($"Invitation '{invitation.Id}' was not found.");
+        }
+
+        entity.TenantId = invitation.TenantId;
+        entity.NormalizedEmail = invitation.NormalizedEmail;
+        entity.Status = invitation.Status.ToString();
+        entity.CreatedByIssuer = invitation.CreatedByIssuer;
+        entity.CreatedBySubject = invitation.CreatedBySubject;
+        entity.CreatedAtUtc = TimeMapping.ToUtcDateTime(invitation.CreatedAt);
+        entity.ClaimedAtUtc = invitation.ClaimedAt is null
+            ? null
+            : TimeMapping.ToUtcDateTime(invitation.ClaimedAt.Value);
+        entity.ClaimedByIssuer = invitation.ClaimedByIssuer;
+        entity.ClaimedBySubject = invitation.ClaimedBySubject;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static TenantInvitationEntity ToEntity(TenantInvitation invitation) => new()
+    {
+        Id = invitation.Id,
+        TenantId = invitation.TenantId,
+        NormalizedEmail = invitation.NormalizedEmail,
+        Status = invitation.Status.ToString(),
+        CreatedByIssuer = invitation.CreatedByIssuer,
+        CreatedBySubject = invitation.CreatedBySubject,
+        CreatedAtUtc = TimeMapping.ToUtcDateTime(invitation.CreatedAt),
+        ClaimedAtUtc = invitation.ClaimedAt is null
+            ? null
+            : TimeMapping.ToUtcDateTime(invitation.ClaimedAt.Value),
+        ClaimedByIssuer = invitation.ClaimedByIssuer,
+        ClaimedBySubject = invitation.ClaimedBySubject
+    };
+
+    private static TenantInvitation Map(TenantInvitationEntity e) => new()
+    {
+        Id = e.Id,
+        TenantId = e.TenantId,
+        NormalizedEmail = e.NormalizedEmail,
+        Status = Enum.TryParse<TenantInvitationStatus>(e.Status, ignoreCase: true, out var status)
+            ? status
+            : TenantInvitationStatus.Pending,
+        CreatedByIssuer = e.CreatedByIssuer,
+        CreatedBySubject = e.CreatedBySubject,
+        CreatedAt = TimeMapping.ToOffset(e.CreatedAtUtc),
+        ClaimedAt = e.ClaimedAtUtc is null ? null : TimeMapping.ToOffset(e.ClaimedAtUtc.Value),
+        ClaimedByIssuer = e.ClaimedByIssuer,
+        ClaimedBySubject = e.ClaimedBySubject
     };
 }
