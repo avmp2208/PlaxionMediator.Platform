@@ -8,6 +8,12 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/tenants/tenants.component').then(m => m.TenantsComponent)
   },
   {
+    path: 'invitations',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/invitations/invitations.component').then(m => m.InvitationsComponent)
+  },
+  {
     path: 'auth/callback',
     loadComponent: () =>
       import('./pages/auth-callback/auth-callback.component').then(m => m.AuthCallbackComponent)

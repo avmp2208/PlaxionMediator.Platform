@@ -23,6 +23,12 @@
         </button>
       }
     }
+    @if (oidcMode && canManageInvitations()) {
+      <a mat-stroked-button routerLink="/invitations" data-testid="invitations-nav">
+        <mat-icon>group_add</mat-icon>
+        Invitations
+      </a>
+    }
     <button mat-flat-button color="primary" (click)="openCreateDialog()">
       <mat-icon>add</mat-icon>
       Create Tenant

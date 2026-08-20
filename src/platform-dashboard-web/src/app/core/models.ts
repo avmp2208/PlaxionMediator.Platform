@@ -74,11 +74,41 @@ export interface TenantRegistryEntry {
   createdAt: string;
 }
 
+/**
+ * Server-side tenant membership role from GET /v1/tenants.
+ * This is TenantMembership.role (Owner/Member), NOT an OIDC/IdP role.
+ */
+export type TenantMembershipRoleName = 'Owner' | 'Member' | string;
+
 /** Server-side tenant membership row from GET /v1/tenants (OIDC mode). */
 export interface TenantListItem {
   tenantId: string;
-  role: string;
+  /** TenantMembership role (Owner/Member). Do not confuse with OIDC/IdP roles. */
+  role: TenantMembershipRoleName;
   createdAt: string;
   /** Optional display name enriched from local create response / registry. */
   tenantName?: string;
+}
+
+/** Invitation status values returned by Platform.Api (enum ToString). */
+export type InvitationStatus = 'Pending' | 'Claimed' | 'Revoked' | string;
+
+/** GET/POST /v1/invitations response item. */
+export interface InvitationItem {
+  id: string;
+  tenantId: string;
+  email: string;
+  status: InvitationStatus;
+  createdAt: string;
+  claimedAt: string | null;
+}
+
+export interface CreateInvitationsRequest {
+  email: string;
+  tenantIds: string[];
+}
+
+export interface CreateInvitationsResponse {
+  invitations: InvitationItem[];
+  skippedTenantIds: string[];
 }

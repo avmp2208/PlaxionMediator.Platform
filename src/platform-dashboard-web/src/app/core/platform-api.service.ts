@@ -5,7 +5,9 @@ import { map } from 'rxjs/operators';
 import {
   ApiKeyListItem,
   CreateApiKeyResponse,
+  CreateInvitationsResponse,
   CreateTenantResponse,
+  InvitationItem,
   MetricPoint,
   MetricSeries,
   PagedRequestTypeRankingResponse,
@@ -28,7 +30,11 @@ export class PlatformApiService {
     return this.http.get<ServiceSummary[]>(`${this.baseUrl}/v1/tenants/${tenantId}/services`);
   }
 
-  /** JWT-authenticated list of tenants the current user belongs to. */
+  /**
+   * JWT-authenticated list of tenants the current user belongs to.
+   * Server JIT-claims matching Pending invitations into Member memberships
+   * before returning — always call fresh (no client cache) after login/refresh.
+   */
   getTenants(): Observable<TenantListItem[]> {
     return this.http.get<TenantListItem[]>(`${this.baseUrl}/v1/tenants`);
   }
@@ -51,6 +57,35 @@ export class PlatformApiService {
 
   whoAmI(): Observable<{ tenantId: string }> {
     return this.http.get<{ tenantId: string }>(`${this.baseUrl}/v1/api-keys/whoami`);
+  }
+
+  /**
+   * Owner-only: create Pending Member invitations for one or more owned tenants.
+   * Body shape matches CreateInvitationsRequest on the API.
+   */
+  createInvitations(email: string, tenantIds: string[]): Observable<CreateInvitationsResponse> {
+    return this.http.post<CreateInvitationsResponse>(`${this.baseUrl}/v1/invitations`, {
+      email,
+      tenantIds
+    });
+  }
+
+  /**
+   * Owner-only: list invitations for a single tenant (pending + history).
+   * Requires tenantId query parameter per API contract.
+   */
+  getInvitations(tenantId: string): Observable<InvitationItem[]> {
+    return this.http.get<InvitationItem[]>(`${this.baseUrl}/v1/invitations`, {
+      params: { tenantId }
+    });
+  }
+
+  /** Owner-only: revoke a Pending invitation. */
+  revokeInvitation(invitationId: string): Observable<InvitationItem> {
+    return this.http.post<InvitationItem>(
+      `${this.baseUrl}/v1/invitations/${invitationId}/revoke`,
+      {}
+    );
   }
 
   getServiceById(tenantId: string, id: string): Observable<ServiceSummary | undefined> {

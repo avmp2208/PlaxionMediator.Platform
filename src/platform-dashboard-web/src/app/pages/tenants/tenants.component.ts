@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,6 +13,7 @@ import { TenantSessionService } from '../../core/tenant-session.service';
 import { AuthService } from '../../core/auth.service';
 import { PlatformApiService } from '../../core/platform-api.service';
 import { TenantListItem, TenantRegistryEntry } from '../../core/models';
+import { anyMembershipHasCapability } from '../../core/tenant-capabilities';
 import { CreateTenantDialogComponent } from './create-tenant-dialog/create-tenant-dialog.component';
 import { RebindKeyDialogComponent } from './rebind-key-dialog/rebind-key-dialog.component';
 
@@ -40,6 +41,14 @@ export class TenantsComponent implements OnInit {
   readonly serverTenants = signal<TenantListItem[]>([]);
   readonly loading = signal(false);
   readonly loadError = signal('');
+
+  /**
+   * Owner-only invitations entry. Derived from server membership roles only —
+   * never from OIDC/IdP roles.
+   */
+  readonly canManageInvitations = computed(() =>
+    anyMembershipHasCapability(this.serverTenants(), 'ManageInvitations')
+  );
 
   constructor(
     readonly registry: TenantRegistryService,
@@ -81,6 +90,11 @@ export class TenantsComponent implements OnInit {
     this.auth.logout();
   }
 
+  /**
+   * Always hits GET /v1/tenants fresh (no client-side tenant cache).
+   * Backend JIT-claims matching Pending invitations into Member memberships
+   * before returning the list — invited users see new tenants after login/refresh.
+   */
   reloadServerTenants(): void {
     this.loading.set(true);
     this.loadError.set('');

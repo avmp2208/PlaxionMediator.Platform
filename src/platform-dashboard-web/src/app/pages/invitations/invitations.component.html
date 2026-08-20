@@ -1,0 +1,173 @@
+<div class="page-header">
+  <div>
+    <h1>Invitations</h1>
+    <p class="page-subtitle">
+      Invite people by email to tenants you own. Invitees join automatically on their next sign-in
+      (no separate accept step).
+    </p>
+  </div>
+  <div class="header-actions">
+    <button mat-stroked-button type="button" (click)="goBack()">
+      <mat-icon>arrow_back</mat-icon>
+      Tenants
+    </button>
+    <button mat-stroked-button type="button" (click)="reload()" [disabled]="loading()">
+      <mat-icon>refresh</mat-icon>
+      Refresh
+    </button>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="loading-wrap">
+    <mat-spinner diameter="36"></mat-spinner>
+  </div>
+} @else if (loadError()) {
+  <mat-card class="empty-card">
+    <mat-icon class="empty-icon">error_outline</mat-icon>
+    <h2>{{ loadError() }}</h2>
+    <button mat-stroked-button type="button" (click)="reload()">Retry</button>
+  </mat-card>
+} @else if (!canAccessInvitations()) {
+  <mat-card class="empty-card">
+    <mat-icon class="empty-icon">lock</mat-icon>
+    <h2>Invitation management is available to tenant owners only</h2>
+    <p>
+      Your memberships do not include Owner on any tenant. You can still open tenants where you are a
+      Member and view services and metrics.
+    </p>
+    <a mat-flat-button color="primary" routerLink="/">Back to tenants</a>
+  </mat-card>
+} @else {
+  @if (formError()) {
+    <div class="banner banner-error" role="alert">{{ formError() }}</div>
+  }
+  @if (formSuccess()) {
+    <div class="banner banner-success" role="status">{{ formSuccess() }}</div>
+  }
+
+  <mat-card class="form-card">
+    <h2 class="card-title">Invite by email</h2>
+    <p class="card-help">
+      Select one or more tenants you own. The invitee becomes a Member automatically when they sign in
+      with a matching email.
+    </p>
+
+    @if (ownedTenants().length === 0) {
+      <p class="muted">You do not own any tenants yet. Create a tenant first to send invitations.</p>
+    } @else {
+      <form class="invite-form" (ngSubmit)="submitInvite()" novalidate>
+        <mat-form-field appearance="outline" class="email-field">
+          <mat-label>Email</mat-label>
+          <input
+            matInput
+            type="email"
+            name="email"
+            autocomplete="email"
+            [(ngModel)]="email"
+            [disabled]="submitting()"
+            required
+          />
+        </mat-form-field>
+
+        <div class="tenant-select">
+          <div class="tenant-select-header">
+            <span class="tenant-select-label">Tenants you own</span>
+            <div class="tenant-select-actions">
+              <button mat-button type="button" (click)="selectAllOwned()" [disabled]="submitting()">
+                Select all
+              </button>
+              <button mat-button type="button" (click)="clearTenantSelection()" [disabled]="submitting()">
+                Clear
+              </button>
+            </div>
+          </div>
+          <div class="tenant-checklist" role="group" aria-label="Owned tenants">
+            @for (t of ownedTenants(); track t.tenantId) {
+              <mat-checkbox
+                [checked]="isTenantSelected(t.tenantId)"
+                (change)="toggleTenant(t.tenantId, $event.checked)"
+                [disabled]="submitting()"
+              >
+                {{ displayTenantName(t.tenantId, t.tenantName) }}
+                <span class="role-tag">{{ t.role }}</span>
+              </mat-checkbox>
+            }
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            [disabled]="submitting()"
+          >
+            @if (submitting()) {
+              <mat-spinner diameter="18" class="btn-spinner"></mat-spinner>
+            } @else {
+              <mat-icon>person_add</mat-icon>
+            }
+            Send invitation
+          </button>
+        </div>
+      </form>
+    }
+  </mat-card>
+
+  <mat-card class="table-card">
+    <h2 class="card-title list-title">Invitations</h2>
+    @if (invitations().length === 0) {
+      <div class="empty-inline">
+        <mat-icon>mail_outline</mat-icon>
+        <p>No invitations yet for your owned tenants.</p>
+      </div>
+    } @else {
+      <table mat-table [dataSource]="invitations()" class="invitations-table">
+        <ng-container matColumnDef="email">
+          <th mat-header-cell *matHeaderCellDef>Invited email</th>
+          <td mat-cell *matCellDef="let row">{{ row.email }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="tenant">
+          <th mat-header-cell *matHeaderCellDef>Tenant</th>
+          <td mat-cell *matCellDef="let row">
+            {{ displayTenantName(row.tenantId, row.tenantName) }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let row">
+            <span class="status-chip" [ngClass]="statusClass(row.status)">{{ row.status }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="createdAt">
+          <th mat-header-cell *matHeaderCellDef>Created</th>
+          <td mat-cell *matCellDef="let row">{{ row.createdAt | date: 'short' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let row">
+            @if (canRevoke(row)) {
+              <button
+                mat-button
+                color="warn"
+                type="button"
+                (click)="revoke(row)"
+                [disabled]="revokingId() === row.id"
+              >
+                Revoke
+              </button>
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+      </table>
+    }
+  </mat-card>
+}

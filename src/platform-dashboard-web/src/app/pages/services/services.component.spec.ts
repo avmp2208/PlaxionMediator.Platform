@@ -11,7 +11,11 @@ describe('ServicesComponent', () => {
 
   beforeEach(async () => {
     const apiMock = {
-      getServices: () => of([])
+      getServices: () =>
+        of([
+          { id: 's1', name: 'billing-api', environment: 'production' },
+          { id: 's2', name: 'orders-api', environment: 'staging' }
+        ])
     };
 
     await TestBed.configureTestingModule({
@@ -30,5 +34,14 @@ describe('ServicesComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('still lists services for Member users (no invitation management UI)', () => {
+    const text = (fixture.nativeElement as HTMLElement).textContent || '';
+    expect(text).toContain('billing-api');
+    expect(text).toContain('orders-api');
+    expect(text.toLowerCase()).not.toContain('invite');
+    expect(text.toLowerCase()).not.toContain('revoke');
+    expect(text.toLowerCase()).not.toContain('api key');
   });
 });
