@@ -95,3 +95,33 @@ public sealed class ApiKey
 
     public bool IsActive => RevokedAt is null;
 }
+
+/// <summary>
+/// Role of an OIDC identity within a tenant. Stored as part of
+/// <see cref="TenantMembership"/>; authorization policies interpret it later.
+/// </summary>
+public enum TenantMembershipRole
+{
+    Owner = 0,
+    Member = 1
+}
+
+/// <summary>
+/// Links an OIDC identity (issuer + subject) to a tenant with a role.
+/// Provider-neutral model; EF/in-memory stores map to this shape.
+/// </summary>
+public sealed class TenantMembership
+{
+    public Guid Id { get; init; }
+    public Guid TenantId { get; init; }
+
+    /// <summary>OIDC token issuer (iss claim).</summary>
+    public string IdentityIssuer { get; init; } = string.Empty;
+
+    /// <summary>OIDC subject identifier (sub claim).</summary>
+    public string IdentitySubject { get; init; } = string.Empty;
+
+    public TenantMembershipRole Role { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}

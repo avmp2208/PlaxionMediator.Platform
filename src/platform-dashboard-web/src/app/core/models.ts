@@ -73,3 +73,12 @@ export interface TenantRegistryEntry {
   maskedKey: string;
   createdAt: string;
 }
+
+/** Server-side tenant membership row from GET /v1/tenants (OIDC mode). */
+export interface TenantListItem {
+  tenantId: string;
+  role: string;
+  createdAt: string;
+  /** Optional display name enriched from local create response / registry. */
+  tenantName?: string;
+}

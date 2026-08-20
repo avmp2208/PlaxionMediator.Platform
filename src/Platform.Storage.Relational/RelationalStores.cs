@@ -403,3 +403,89 @@ public sealed class RelationalApiKeyStore : IApiKeyStore
         RevokedAt = e.RevokedAtUtc is null ? null : TimeMapping.ToOffset(e.RevokedAtUtc.Value)
     };
 }
+
+public sealed class RelationalTenantMembershipStore : ITenantMembershipStore
+{
+    private readonly IDbContextFactory<PlatformDbContext> _dbFactory;
+
+    public RelationalTenantMembershipStore(IDbContextFactory<PlatformDbContext> dbFactory)
+    {
+        _dbFactory = dbFactory;
+    }
+
+    public async Task AddAsync(TenantMembership membership, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        db.TenantMemberships.Add(new TenantMembershipEntity
+        {
+            Id = membership.Id,
+            TenantId = membership.TenantId,
+            IdentityIssuer = membership.IdentityIssuer,
+            IdentitySubject = membership.IdentitySubject,
+            Role = membership.Role.ToString(),
+            CreatedAtUtc = TimeMapping.ToUtcDateTime(membership.CreatedAt)
+        });
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<TenantMembership?> GetByIdAsync(Guid membershipId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.TenantMemberships.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == membershipId, cancellationToken);
+        return entity is null ? null : Map(entity);
+    }
+
+    public async Task<TenantMembership?> GetAsync(
+        Guid tenantId,
+        string identityIssuer,
+        string identitySubject,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.TenantMemberships.AsNoTracking()
+            .FirstOrDefaultAsync(
+                m => m.TenantId == tenantId
+                     && m.IdentityIssuer == identityIssuer
+                     && m.IdentitySubject == identitySubject,
+                cancellationToken);
+        return entity is null ? null : Map(entity);
+    }
+
+    public async Task<IReadOnlyList<TenantMembership>> ListByTenantAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.TenantMemberships.AsNoTracking()
+            .Where(m => m.TenantId == tenantId)
+            .OrderBy(m => m.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+        return rows.Select(Map).ToList();
+    }
+
+    public async Task<IReadOnlyList<TenantMembership>> ListByIdentityAsync(
+        string identityIssuer,
+        string identitySubject,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.TenantMemberships.AsNoTracking()
+            .Where(m => m.IdentityIssuer == identityIssuer && m.IdentitySubject == identitySubject)
+            .OrderBy(m => m.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+        return rows.Select(Map).ToList();
+    }
+
+    private static TenantMembership Map(TenantMembershipEntity e) => new()
+    {
+        Id = e.Id,
+        TenantId = e.TenantId,
+        IdentityIssuer = e.IdentityIssuer,
+        IdentitySubject = e.IdentitySubject,
+        Role = Enum.TryParse<TenantMembershipRole>(e.Role, ignoreCase: true, out var role)
+            ? role
+            : TenantMembershipRole.Member,
+        CreatedAt = TimeMapping.ToOffset(e.CreatedAtUtc)
+    };
+}

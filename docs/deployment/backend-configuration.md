@@ -104,6 +104,48 @@ See [database-migrations.md](./database-migrations.md).
 
 Ingestion does **not** enable CORS (OTLP is not a browser client).
 
+## Authentication (Platform.Api only)
+
+| Key | Required | Default | Secret? | Notes |
+|-----|----------|---------|---------|-------|
+| `Authentication:Enabled` | No | `false` | No | Enables OIDC / JWT Bearer validation. |
+| `Authentication:Authority` | Yes (if Enabled) | `null` | No | OIDC issuer URL. |
+| `Authentication:Audience` | Yes (if Enabled) | `null` | No | Expected JWT audience. |
+| `Authentication:RequireHttpsMetadata` | No | `true` | No | Metadata discovery over HTTPS. |
+| `Authentication:AllowAnonymousProduction` | No | `false` | No | If `false`, Production fails startup when Authentication is disabled. |
+
+See [authentication.md](./authentication.md) for details.
+
+## Authorization (Platform.Api only)
+
+### Tenant Creation
+
+| Key | Required | Default | Secret? | Notes |
+|-----|----------|---------|---------|-------|
+| `Authorization:TenantCreation:Mode` | No | `AnyAuthenticatedUser` | No | `AnyAuthenticatedUser`, `Role`, `Claim`. |
+| `Authorization:TenantCreation:RequiredRole` | Yes (if Role) | `null` | No | Required role name. |
+| `Authorization:TenantCreation:RequiredClaimType` | Yes (if Claim) | `null` | No | Required claim type. |
+| `Authorization:TenantCreation:RequiredClaimValues` | No | `[]` | No | String array of allowed values. |
+
+### Platform Administrator
+
+| Key | Required | Default | Secret? | Notes |
+|-----|----------|---------|---------|-------|
+| `Authorization:PlatformAdministrator:Mode` | No | `Disabled` | No | `Disabled`, `Role`, `Claim`. |
+| `Authorization:PlatformAdministrator:RequiredRole` | Yes (if Role) | `null` | No | Required role name. |
+| `Authorization:PlatformAdministrator:RequiredClaimType` | Yes (if Claim) | `null` | No | Required claim type. |
+| `Authorization:PlatformAdministrator:RequiredClaimValues` | No | `[]` | No | String array of allowed values. |
+
+## Dashboard (Public Runtime Config)
+
+| Key | Required | Default | Secret? | Notes |
+|-----|----------|---------|---------|-------|
+| `Dashboard:ApiBaseUrl` | No | `""` (same-origin) | No | API URL called by the SPA. |
+| `Dashboard:Oidc:ClientId` | Yes (if Auth Enabled) | `null` | No | Public client ID. |
+| `Dashboard:Oidc:Scopes` | No | `openid profile email` | No | String array. |
+| `Dashboard:Oidc:RedirectPath` | No | `/auth/callback` | No | SPA callback path. |
+| `Dashboard:Oidc:PostLogoutRedirectPath` | No | `/` | No | SPA post-logout path. |
+
 ## Security
 
 There is no dev/seeded API key in any environment. Every tenant (including local
@@ -138,6 +180,7 @@ On host start, options are validated (`ValidateOnStart`):
 - Production/Staging/QA + `InMemory` → startup exception
 - Production/Staging/QA + `Sqlite` → startup exception (only `PostgreSql`/`MySql` are allowed)
 - Production/Staging/QA + pending EF migrations (when `FailOnPendingMigrations=true`) → startup exception
+- Production + `Authentication:Enabled=false` + `Authentication:AllowAnonymousProduction=false` → startup exception
 
 A single non-secret startup log line reports environment, storage provider, schema status, aggregation/retention settings, and version. Connection strings and API keys are never logged.
 

@@ -6,7 +6,7 @@
     </div>
 
     <mat-nav-list>
-      <a mat-list-item (click)="switchTenant()">
+      <a mat-list-item (click)="goToTenants()">
         <mat-icon matListItemIcon>apartment</mat-icon>
         <span matListItemTitle>All Tenants</span>
       </a>
@@ -21,6 +21,12 @@
     <mat-toolbar class="shell-toolbar">
       <span class="toolbar-title">Platform Dashboard</span>
       <span class="spacer"></span>
+      @if (auth.authenticationEnabled) {
+        <button mat-button type="button" (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          Sign out
+        </button>
+      }
     </mat-toolbar>
 
     <div class="shell-body">

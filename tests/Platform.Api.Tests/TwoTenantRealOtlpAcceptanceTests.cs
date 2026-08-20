@@ -376,6 +376,9 @@ public sealed class TwoTenantRealOtlpAcceptanceTests : IAsyncLifetime
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Production");
+            // Production API requires either OIDC or an explicit anonymous opt-out.
+            // This acceptance test exercises API-key isolation, not OIDC.
+            builder.UseSetting("Authentication:AllowAnonymousProduction", "true");
             builder.ConfigureTestServices(services =>
             {
                 RemoveStorage(services);
@@ -393,6 +396,7 @@ public sealed class TwoTenantRealOtlpAcceptanceTests : IAsyncLifetime
                 typeof(IAggregateRollupStore),
                 typeof(IServiceCatalog),
                 typeof(IApiKeyStore),
+                typeof(ITenantMembershipStore),
                 typeof(IDbContextFactory<PlatformDbContext>),
                 typeof(PlatformDbContext)
             };

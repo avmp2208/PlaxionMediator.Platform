@@ -7,12 +7,21 @@ import { of } from 'rxjs';
 import { TenantsComponent } from './tenants.component';
 import { TenantRegistryService } from '../../core/tenant-registry.service';
 import { TenantSessionService } from '../../core/tenant-session.service';
+import { AuthService } from '../../core/auth.service';
+import { PlatformApiService } from '../../core/platform-api.service';
 
 describe('TenantsComponent', () => {
   let component: TenantsComponent;
   let fixture: ComponentFixture<TenantsComponent>;
   let registryMock: { tenants: () => any[]; add: jasmine.Spy };
   let sessionMock: { isActiveTenant: jasmine.Spy; signIn: jasmine.Spy };
+  let authMock: {
+    authenticationEnabled: boolean;
+    hasValidAccessToken: jasmine.Spy;
+    login: jasmine.Spy;
+    logout: jasmine.Spy;
+  };
+  let apiMock: { getTenants: jasmine.Spy };
   let dialogMock: { open: jasmine.Spy };
   let router: Router;
 
@@ -25,6 +34,15 @@ describe('TenantsComponent', () => {
       isActiveTenant: jasmine.createSpy('isActiveTenant').and.returnValue(false),
       signIn: jasmine.createSpy('signIn')
     };
+    authMock = {
+      authenticationEnabled: false,
+      hasValidAccessToken: jasmine.createSpy('hasValidAccessToken').and.returnValue(false),
+      login: jasmine.createSpy('login'),
+      logout: jasmine.createSpy('logout')
+    };
+    apiMock = {
+      getTenants: jasmine.createSpy('getTenants').and.returnValue(of([]))
+    };
     dialogMock = {
       open: jasmine.createSpy('open')
     };
@@ -36,6 +54,8 @@ describe('TenantsComponent', () => {
         provideNoopAnimations(),
         { provide: TenantRegistryService, useValue: registryMock },
         { provide: TenantSessionService, useValue: sessionMock },
+        { provide: AuthService, useValue: authMock },
+        { provide: PlatformApiService, useValue: apiMock },
         { provide: MatDialog, useValue: dialogMock }
       ]
     })
@@ -56,7 +76,7 @@ describe('TenantsComponent', () => {
     expect(compiled.textContent).toContain('No tenants yet');
   });
 
-  it('should register the tenant and activate its session key when the create dialog closes with a result', () => {
+  it('should register the tenant and activate its session key when auth is disabled', () => {
     const result = {
       tenantId: 't1',
       tenantName: 'Acme',
@@ -73,6 +93,31 @@ describe('TenantsComponent', () => {
       jasmine.objectContaining({ tenantId: 't1', tenantName: 'Acme' })
     );
     expect(sessionMock.signIn).toHaveBeenCalledWith('t1', 'pk_abcd1234');
+  });
+
+  it('should not use the API key as session credential when OIDC is enabled', () => {
+    // Rebuild component in OIDC mode.
+    authMock.authenticationEnabled = true;
+    authMock.hasValidAccessToken.and.returnValue(true);
+    fixture = TestBed.createComponent(TenantsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const result = {
+      tenantId: 't1',
+      tenantName: 'Acme',
+      apiKeyId: 'k1',
+      apiKeyName: 'default',
+      plaintextKey: 'pk_abcd1234',
+      createdAt: '2024-01-01T00:00:00Z'
+    };
+    dialogMock.open.and.returnValue({ afterClosed: () => of(result) });
+
+    component.openCreateDialog();
+
+    expect(registryMock.add).toHaveBeenCalled();
+    expect(sessionMock.signIn).not.toHaveBeenCalled();
+    expect(apiMock.getTenants).toHaveBeenCalled();
   });
 
   it('should navigate directly to the tenant services view when managing a tenant with an active session key', () => {
@@ -92,7 +137,7 @@ describe('TenantsComponent', () => {
     expect(navigateSpy).toHaveBeenCalledWith(['/tenants', 't1', 'services']);
   });
 
-  it('should prompt for the API key when managing a tenant with no active session key', () => {
+  it('should prompt for the API key when managing a tenant with no active session key (auth disabled)', () => {
     sessionMock.isActiveTenant.and.returnValue(false);
     const navigateSpy = spyOn(router, 'navigate');
     dialogMock.open.and.returnValue({ afterClosed: () => of('pk_restored') });
@@ -125,5 +170,23 @@ describe('TenantsComponent', () => {
     });
 
     expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('should open tenant services without API-key prompt when OIDC is enabled', () => {
+    authMock.authenticationEnabled = true;
+    authMock.hasValidAccessToken.and.returnValue(true);
+    fixture = TestBed.createComponent(TenantsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const navigateSpy = spyOn(router, 'navigate');
+    component.manage({
+      tenantId: 't-oidc',
+      role: 'Owner',
+      createdAt: '2024-01-01T00:00:00Z'
+    });
+
+    expect(dialogMock.open).not.toHaveBeenCalled();
+    expect(navigateSpy).toHaveBeenCalledWith(['/tenants', 't-oidc', 'services']);
   });
 });

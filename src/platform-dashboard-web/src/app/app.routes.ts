@@ -8,14 +8,18 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/tenants/tenants.component').then(m => m.TenantsComponent)
   },
   {
+    path: 'auth/callback',
+    loadComponent: () =>
+      import('./pages/auth-callback/auth-callback.component').then(m => m.AuthCallbackComponent)
+  },
+  {
+    path: 'unauthorized',
+    loadComponent: () =>
+      import('./pages/unauthorized/unauthorized.component').then(m => m.UnauthorizedComponent)
+  },
+  {
     path: '',
     loadComponent: () => import('./layout/shell/shell.component').then(m => m.ShellComponent),
-    // Services/metrics are gated server-side by [Authorize] +
-    // TenantId-from-key validation (see ServicesController/
-    // ServiceMetricsController in Platform.Api). authGuard mirrors that
-    // requirement client-side: it redirects to '/' when there is no active
-    // session key for the requested tenant, so the user is prompted to
-    // supply the key instead of hitting a 401/404 from the API.
     children: [
       {
         path: 'tenants/:tenantId/services',

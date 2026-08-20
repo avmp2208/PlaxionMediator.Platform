@@ -1,22 +1,92 @@
 <div class="page-header">
   <div>
     <h1>Tenants</h1>
-    <p class="page-subtitle">API keys you've created on this browser, one per tenant.</p>
+    <p class="page-subtitle">
+      @if (oidcMode) {
+        Tenants you belong to, resolved from the server for your signed-in identity.
+      } @else {
+        API keys you've created on this browser, one per tenant.
+      }
+    </p>
   </div>
-  <button mat-flat-button color="primary" (click)="openCreateDialog()">
-    <mat-icon>add</mat-icon>
-    Create Tenant
-  </button>
+  <div class="header-actions">
+    @if (oidcMode) {
+      @if (auth.hasValidAccessToken()) {
+        <button mat-stroked-button type="button" (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          Sign out
+        </button>
+      } @else {
+        <button mat-stroked-button type="button" (click)="login()">
+          <mat-icon>login</mat-icon>
+          Sign in
+        </button>
+      }
+    }
+    <button mat-flat-button color="primary" (click)="openCreateDialog()">
+      <mat-icon>add</mat-icon>
+      Create Tenant
+    </button>
+  </div>
 </div>
 
-@if (registry.tenants().length === 0) {
+@if (oidcMode && !auth.hasValidAccessToken()) {
+  <mat-card class="empty-card">
+    <mat-icon class="empty-icon">login</mat-icon>
+    <h2>Sign in to view your tenants</h2>
+    <p>Use your organization identity to list tenants and open the dashboard.</p>
+    <button mat-flat-button color="primary" type="button" (click)="login()">Sign in</button>
+  </mat-card>
+} @else if (oidcMode && loading()) {
+  <div class="loading-wrap">
+    <mat-spinner diameter="36"></mat-spinner>
+  </div>
+} @else if (oidcMode && loadError()) {
+  <mat-card class="empty-card">
+    <mat-icon class="empty-icon">error_outline</mat-icon>
+    <h2>{{ loadError() }}</h2>
+    <button mat-stroked-button type="button" (click)="reloadServerTenants()">Retry</button>
+  </mat-card>
+} @else if (showEmpty) {
   <mat-card class="empty-card">
     <mat-icon class="empty-icon">apartment</mat-icon>
     <h2>No tenants yet. Create one to get started.</h2>
     <p>
       Creating a tenant generates an API key you can share with the service that will send metrics.
+      @if (oidcMode) {
+        The key is for your telemetry apps — this dashboard uses your sign-in session, not the API key.
+      }
     </p>
     <button mat-flat-button color="primary" (click)="openCreateDialog()">Create Tenant</button>
+  </mat-card>
+} @else if (oidcMode) {
+  <mat-card class="table-card">
+    <table mat-table [dataSource]="serverTenants()" class="tenants-table">
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>Tenant</th>
+        <td mat-cell *matCellDef="let t">{{ displayName(t) }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="role">
+        <th mat-header-cell *matHeaderCellDef>Role</th>
+        <td mat-cell *matCellDef="let t">{{ t.role }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="createdAt">
+        <th mat-header-cell *matHeaderCellDef>Membership</th>
+        <td mat-cell *matCellDef="let t">{{ t.createdAt | date: 'short' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let t">
+          <button mat-button color="primary" (click)="manage(t)">Open</button>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns" class="tenant-row"></tr>
+    </table>
   </mat-card>
 } @else {
   <mat-card class="table-card">

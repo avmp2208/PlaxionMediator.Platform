@@ -16,6 +16,7 @@ public static class StorageServiceCollectionExtensions
         services.AddSingleton<IAggregateRollupStore, InMemoryAggregateRollupStore>();
         services.AddSingleton<IServiceCatalog, InMemoryServiceCatalog>();
         services.AddSingleton<IApiKeyStore, InMemoryApiKeyStore>();
+        services.AddSingleton<ITenantMembershipStore, InMemoryTenantMembershipStore>();
         return services;
     }
 }

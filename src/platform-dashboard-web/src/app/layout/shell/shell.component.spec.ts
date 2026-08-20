@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 
 import { ShellComponent } from './shell.component';
+import { AuthService } from '../../core/auth.service';
 
 describe('ShellComponent', () => {
   let component: ShellComponent;
@@ -11,7 +12,17 @@ describe('ShellComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ShellComponent],
-      providers: [provideRouter([]), provideNoopAnimations()]
+      providers: [
+        provideRouter([]),
+        provideNoopAnimations(),
+        {
+          provide: AuthService,
+          useValue: {
+            authenticationEnabled: false,
+            logout: jasmine.createSpy('logout')
+          }
+        }
+      ]
     })
     .compileComponents();
 

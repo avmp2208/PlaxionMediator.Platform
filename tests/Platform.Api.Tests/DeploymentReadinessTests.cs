@@ -32,6 +32,9 @@ public sealed class DeploymentReadinessTests
             builder.UseSetting("Storage:Provider", "PostgreSql");
             // Intentionally omit ConnectionStrings:Platform
             builder.UseSetting("ConnectionStrings:Platform", "");
+            // Auth disabled is allowed only with explicit Production opt-out;
+            // keep this test focused on the connection-string failure.
+            builder.UseSetting("Authentication:AllowAnonymousProduction", "true");
         });
 
         var ex = Assert.ThrowsAny<Exception>(() =>
@@ -50,6 +53,7 @@ public sealed class DeploymentReadinessTests
             builder.UseEnvironment("Production");
             builder.UseSetting("Storage:Provider", "InMemory");
             builder.UseSetting("ConnectionStrings:Platform", "Host=localhost;Database=x");
+            builder.UseSetting("Authentication:AllowAnonymousProduction", "true");
         });
 
         var ex = Assert.ThrowsAny<Exception>(() =>
@@ -261,7 +265,7 @@ public sealed class DeploymentReadinessTests
             var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
             Assert.True(count >= 1);
 
-            var tables = new[] { "metric_samples", "aggregate_rollups", "services", "api_keys" };
+            var tables = new[] { "metric_samples", "aggregate_rollups", "services", "api_keys", "tenant_memberships" };
             foreach (var table in tables)
             {
                 cmd.CommandText = $"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'";
@@ -356,6 +360,7 @@ public sealed class DeploymentReadinessTests
             builder.UseSetting("Storage:Provider", "Sqlite");
             builder.UseSetting("ConnectionStrings:Platform", "Data Source=should-not-be-used.db");
             builder.UseSetting("Cors:AllowedOrigins:0", "https://app.example.com");
+            builder.UseSetting("Authentication:AllowAnonymousProduction", "true");
         });
 
         var ex = Assert.ThrowsAny<Exception>(() => factory.Server);

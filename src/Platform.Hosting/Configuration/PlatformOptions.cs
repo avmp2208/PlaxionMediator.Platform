@@ -80,6 +80,42 @@ public sealed class SecurityOptions
 }
 
 /// <summary>
+/// OIDC / JWT Bearer authentication settings for human-facing Platform.Api
+/// endpoints. Bound from the "Authentication" configuration section.
+/// Machine/telemetry auth continues to use API keys (separate scheme).
+/// </summary>
+public sealed class AuthenticationOptions
+{
+    public const string SectionName = "Authentication";
+
+    /// <summary>
+    /// When true, register and validate JWT Bearer tokens against
+    /// <see cref="Authority"/> / <see cref="Audience"/> via OIDC metadata discovery.
+    /// Defaults to false so local Development can run without an IdP.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>OIDC authority (issuer) base URL, e.g. https://login.example.com/.</summary>
+    public string? Authority { get; set; }
+
+    /// <summary>Expected JWT audience (API resource identifier).</summary>
+    public string? Audience { get; set; }
+
+    /// <summary>
+    /// When true, OIDC metadata and JWKS must be fetched over HTTPS.
+    /// Defaults to true; set false only for local IdP testing.
+    /// </summary>
+    public bool RequireHttpsMetadata { get; set; } = true;
+
+    /// <summary>
+    /// Explicit Production opt-out: when <see cref="Enabled"/> is false in
+    /// Production, startup fails unless this is set to true. Development may
+    /// leave authentication disabled without this flag.
+    /// </summary>
+    public bool AllowAnonymousProduction { get; set; }
+}
+
+/// <summary>
 /// Observability settings. Bound from the "Observability" configuration section.
 /// OTLP exporter credentials, when used, must come from env vars — never commit secrets.
 /// </summary>
@@ -183,5 +219,241 @@ public sealed class StorageOptionsValidator : IValidateOptions<StorageOptions>
         }
 
         return ValidateOptionsResult.Success;
+    }
+}
+
+/// <summary>
+/// Validates OIDC authentication configuration fields. The Production
+/// AllowAnonymousProduction fail-fast is enforced only in Platform.Api
+/// (see Program.cs) so machine hosts like Platform.Ingestion are unaffected.
+/// </summary>
+public sealed class AuthenticationOptionsValidator : IValidateOptions<AuthenticationOptions>
+{
+    public ValidateOptionsResult Validate(string? name, AuthenticationOptions options)
+    {
+        if (!options.Enabled)
+        {
+            return ValidateOptionsResult.Success;
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Authority))
+        {
+            return ValidateOptionsResult.Fail(
+                "Authentication:Authority is required when Authentication:Enabled is true.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Audience))
+        {
+            return ValidateOptionsResult.Fail(
+                "Authentication:Audience is required when Authentication:Enabled is true.");
+        }
+
+        return ValidateOptionsResult.Success;
+    }
+}
+
+/// <summary>
+/// Public, non-secret Dashboard runtime settings. Bound from the "Dashboard"
+/// configuration section. Surfaced via GET /v1/platform/config and the
+/// container-generated wwwroot/assets/config.json (no client secrets).
+/// </summary>
+public sealed class DashboardOptions
+{
+    public const string SectionName = "Dashboard";
+
+    /// <summary>
+    /// API base URL the SPA should call. Empty string means same-origin.
+    /// Mirrors the container API_BASE_URL entrypoint variable.
+    /// </summary>
+    public string? ApiBaseUrl { get; set; }
+
+    /// <summary>Public OIDC SPA client settings (no client secret).</summary>
+    public DashboardOidcOptions Oidc { get; set; } = new();
+}
+
+/// <summary>
+/// Browser OIDC client settings for the Angular Dashboard.
+/// Bound from "Dashboard:Oidc". Public-client only — never a client secret.
+/// </summary>
+public sealed class DashboardOidcOptions
+{
+    public const string SectionName = "Dashboard:Oidc";
+
+    /// <summary>Public OIDC client_id registered at the identity provider.</summary>
+    public string? ClientId { get; set; }
+
+    /// <summary>OIDC scopes requested by the SPA (Authorization Code + PKCE).</summary>
+    public string[] Scopes { get; set; } = ["openid", "profile", "email"];
+
+    /// <summary>In-app path for the OIDC redirect callback (e.g. /auth/callback).</summary>
+    public string RedirectPath { get; set; } = "/auth/callback";
+
+    /// <summary>In-app path after end-session (e.g. /).</summary>
+    public string PostLogoutRedirectPath { get; set; } = "/";
+}
+
+/// <summary>
+/// How tenant-creation authorization decides who may call POST /v1/tenants
+/// when Authentication:Enabled is true.
+/// </summary>
+public enum TenantCreationMode
+{
+    /// <summary>Any principal authenticated via JWT Bearer may create a tenant.</summary>
+    AnyAuthenticatedUser = 0,
+
+    /// <summary>Principal must have <see cref="TenantCreationOptions.RequiredRole"/>.</summary>
+    Role = 1,
+
+    /// <summary>
+    /// Principal must carry <see cref="TenantCreationOptions.RequiredClaimType"/>
+    /// with one of <see cref="TenantCreationOptions.RequiredClaimValues"/> (or any
+    /// value when the values list is empty).
+    /// </summary>
+    Claim = 2
+}
+
+/// <summary>
+/// Authorization rules for self-service tenant bootstrap.
+/// Bound from the "Authorization:TenantCreation" configuration section.
+/// Claim/role checks are provider-neutral (configured claim type/values only).
+/// </summary>
+public sealed class TenantCreationOptions
+{
+    public const string SectionName = "Authorization:TenantCreation";
+
+    /// <summary>Authorization mode. Defaults to any authenticated JWT user.</summary>
+    public TenantCreationMode Mode { get; set; } = TenantCreationMode.AnyAuthenticatedUser;
+
+    /// <summary>Required role name when <see cref="Mode"/> is <see cref="TenantCreationMode.Role"/>.</summary>
+    public string? RequiredRole { get; set; }
+
+    /// <summary>Claim type to require when <see cref="Mode"/> is <see cref="TenantCreationMode.Claim"/>.</summary>
+    public string? RequiredClaimType { get; set; }
+
+    /// <summary>
+    /// Allowed values for <see cref="RequiredClaimType"/>. When empty in Claim
+    /// mode, presence of the claim type alone is sufficient.
+    /// </summary>
+    public string[] RequiredClaimValues { get; set; } = [];
+}
+
+/// <summary>Validates <see cref="TenantCreationOptions"/> field combinations per mode.</summary>
+public sealed class TenantCreationOptionsValidator : IValidateOptions<TenantCreationOptions>
+{
+    public ValidateOptionsResult Validate(string? name, TenantCreationOptions options)
+    {
+        switch (options.Mode)
+        {
+            case TenantCreationMode.AnyAuthenticatedUser:
+                return ValidateOptionsResult.Success;
+
+            case TenantCreationMode.Role:
+                if (string.IsNullOrWhiteSpace(options.RequiredRole))
+                {
+                    return ValidateOptionsResult.Fail(
+                        "Authorization:TenantCreation:RequiredRole is required when Mode is Role.");
+                }
+
+                return ValidateOptionsResult.Success;
+
+            case TenantCreationMode.Claim:
+                if (string.IsNullOrWhiteSpace(options.RequiredClaimType))
+                {
+                    return ValidateOptionsResult.Fail(
+                        "Authorization:TenantCreation:RequiredClaimType is required when Mode is Claim.");
+                }
+
+                return ValidateOptionsResult.Success;
+
+            default:
+                return ValidateOptionsResult.Fail(
+                    $"Authorization:TenantCreation:Mode '{options.Mode}' is not supported.");
+        }
+    }
+}
+
+/// <summary>
+/// How platform-administrator authorization is evaluated for legacy-tenant
+/// reconciliation and cross-tenant operational bypass.
+/// </summary>
+public enum PlatformAdministratorMode
+{
+    /// <summary>
+    /// No principal is treated as a platform administrator. Safe default for
+    /// new and upgraded deployments until operators deliberately enable it.
+    /// </summary>
+    Disabled = 0,
+
+    /// <summary>Principal must have <see cref="PlatformAdministratorOptions.RequiredRole"/>.</summary>
+    Role = 1,
+
+    /// <summary>
+    /// Principal must carry <see cref="PlatformAdministratorOptions.RequiredClaimType"/>
+    /// with one of <see cref="PlatformAdministratorOptions.RequiredClaimValues"/> (or any
+    /// value when the values list is empty).
+    /// </summary>
+    Claim = 2
+}
+
+/// <summary>
+/// Authorization rules for platform operators who may administer any tenant
+/// (including pre-OIDC legacy tenants with zero membership rows) and call the
+/// explicit membership reconciliation endpoint.
+/// Bound from the "Authorization:PlatformAdministrator" configuration section.
+/// Keep Mode=Disabled until an upgrade run needs bootstrap access; then set
+/// Role/Claim against a tightly scoped IdP group and revoke after reconciliation.
+/// </summary>
+public sealed class PlatformAdministratorOptions
+{
+    public const string SectionName = "Authorization:PlatformAdministrator";
+
+    /// <summary>Authorization mode. Defaults to Disabled (no platform admins).</summary>
+    public PlatformAdministratorMode Mode { get; set; } = PlatformAdministratorMode.Disabled;
+
+    /// <summary>Required role name when <see cref="Mode"/> is <see cref="PlatformAdministratorMode.Role"/>.</summary>
+    public string? RequiredRole { get; set; }
+
+    /// <summary>Claim type to require when <see cref="Mode"/> is <see cref="PlatformAdministratorMode.Claim"/>.</summary>
+    public string? RequiredClaimType { get; set; }
+
+    /// <summary>
+    /// Allowed values for <see cref="RequiredClaimType"/>. When empty in Claim
+    /// mode, presence of the claim type alone is sufficient.
+    /// </summary>
+    public string[] RequiredClaimValues { get; set; } = [];
+}
+
+/// <summary>Validates <see cref="PlatformAdministratorOptions"/> field combinations per mode.</summary>
+public sealed class PlatformAdministratorOptionsValidator : IValidateOptions<PlatformAdministratorOptions>
+{
+    public ValidateOptionsResult Validate(string? name, PlatformAdministratorOptions options)
+    {
+        switch (options.Mode)
+        {
+            case PlatformAdministratorMode.Disabled:
+                return ValidateOptionsResult.Success;
+
+            case PlatformAdministratorMode.Role:
+                if (string.IsNullOrWhiteSpace(options.RequiredRole))
+                {
+                    return ValidateOptionsResult.Fail(
+                        "Authorization:PlatformAdministrator:RequiredRole is required when Mode is Role.");
+                }
+
+                return ValidateOptionsResult.Success;
+
+            case PlatformAdministratorMode.Claim:
+                if (string.IsNullOrWhiteSpace(options.RequiredClaimType))
+                {
+                    return ValidateOptionsResult.Fail(
+                        "Authorization:PlatformAdministrator:RequiredClaimType is required when Mode is Claim.");
+                }
+
+                return ValidateOptionsResult.Success;
+
+            default:
+                return ValidateOptionsResult.Fail(
+                    $"Authorization:PlatformAdministrator:Mode '{options.Mode}' is not supported.");
+        }
     }
 }

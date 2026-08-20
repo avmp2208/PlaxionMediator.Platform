@@ -1,14 +1,18 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Platform.Aggregation;
 using Platform.Api;
+using Platform.Api.Authorization;
 using Platform.Hosting;
 using Platform.Hosting.Configuration;
 using Platform.Identity;
 using Platform.Storage.Relational;
 using Platform.Storage.Relational.Health;
 using CorsOptions = Platform.Hosting.Configuration.CorsOptions;
+using AuthenticationOptions = Platform.Hosting.Configuration.AuthenticationOptions;
 
 var migrateOnly = MigrateCommand.IsMigrateOnly(args);
 var builder = WebApplication.CreateBuilder(args);
@@ -26,11 +30,120 @@ builder.Services.AddHostedService<AggregationHostedService>();
 // evicted by this job, so rollups never depend on samples this job deletes.
 builder.Services.AddHostedService<RetentionHostedService>();
 
-builder.Services
+// API key remains the default scheme so existing machine/telemetry-oriented
+// endpoints (and current controller AuthenticationSchemes attributes) keep
+// working. JWT Bearer is registered as an additional scheme for human-facing
+// OIDC auth; later phases will switch tenant-management controllers to it.
+var authenticationOptions = builder.Configuration
+    .GetSection(AuthenticationOptions.SectionName)
+    .Get<AuthenticationOptions>() ?? new AuthenticationOptions();
+
+// Platform.Api-only Production fail-fast: human-facing host must not run
+// anonymously unless operators explicitly opt out. Machine hosts (Ingestion)
+// do not enforce this knob.
+if (!authenticationOptions.Enabled
+    && builder.Environment.IsProduction()
+    && !authenticationOptions.AllowAnonymousProduction)
+{
+    throw new InvalidOperationException(
+        "Authentication is disabled in Production but Authentication:AllowAnonymousProduction " +
+        "is not true. Either configure Authentication:Enabled=true with Authority/Audience, " +
+        "or set Authentication:AllowAnonymousProduction=true to explicitly allow anonymous " +
+        "human-facing API access (not recommended).");
+}
+
+var authenticationBuilder = builder.Services
     .AddAuthentication(ApiKeyAuthenticationDefaults.SchemeName)
     .AddScheme<ApiKeyAuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
         ApiKeyAuthenticationDefaults.SchemeName, _ => { });
-builder.Services.AddAuthorization();
+
+if (authenticationOptions.Enabled)
+{
+    authenticationBuilder.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+    {
+        // Authority triggers OIDC discovery (.well-known/openid-configuration)
+        // and JWKS-based signature validation — no manual JWT parsing.
+        options.Authority = authenticationOptions.Authority;
+        options.Audience = authenticationOptions.Audience;
+        options.RequireHttpsMetadata = authenticationOptions.RequireHttpsMetadata;
+        // Keep JWT short names (iss/sub/role) so membership + policies stay
+        // provider-neutral without depending on long WS-* claim URIs.
+        options.MapInboundClaims = false;
+    });
+}
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<PlatformAdministratorEvaluator>();
+builder.Services.AddSingleton<IAuthorizationHandler, TenantCreationAuthorizationHandler>();
+builder.Services.AddSingleton<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
+builder.Services.AddSingleton<IAuthorizationHandler, PlatformAdministratorAuthorizationHandler>();
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, TenantMembershipAuthorizationResultHandler>();
+
+builder.Services.AddAuthorization(options =>
+{
+    // Named policy for human-facing endpoints (JWT Bearer).
+    // When OIDC is off the JWT scheme is not registered — deny cleanly
+    // instead of throwing on an unknown scheme (would surface as 500).
+    options.AddPolicy(PlatformAuthenticationPolicies.JwtBearer, policy =>
+    {
+        if (authenticationOptions.Enabled)
+        {
+            policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+            policy.RequireAuthenticatedUser();
+        }
+        else
+        {
+            policy.RequireAssertion(_ => false);
+        }
+    });
+
+    // Tenant bootstrap: when OIDC is on, require JWT + TenantCreationOptions;
+    // when off (dev/testing), allow anonymous self-service as before.
+    options.AddPolicy(PlatformAuthenticationPolicies.TenantCreation, policy =>
+    {
+        if (authenticationOptions.Enabled)
+        {
+            policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+            policy.RequireAuthenticatedUser();
+            policy.Requirements.Add(new TenantCreationRequirement());
+        }
+        else
+        {
+            policy.RequireAssertion(_ => true);
+        }
+    });
+
+    // Tenant-scoped resources: API key (trusted tenant_id) and/or JWT membership
+    // (or platform-administrator bypass for legacy-tenant operations).
+    var tenantMemberSchemes = new List<string> { ApiKeyAuthenticationDefaults.SchemeName };
+    if (authenticationOptions.Enabled)
+    {
+        tenantMemberSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
+    }
+
+    options.AddPolicy(PlatformAuthenticationPolicies.TenantMember, policy =>
+    {
+        policy.AddAuthenticationSchemes(tenantMemberSchemes.ToArray());
+        policy.RequireAuthenticatedUser();
+        policy.Requirements.Add(new TenantMembershipRequirement());
+    });
+
+    // Explicit membership reconciliation / platform operator actions.
+    // Never anonymous: when OIDC is off there is no JWT path to satisfy this.
+    options.AddPolicy(PlatformAuthenticationPolicies.PlatformAdministrator, policy =>
+    {
+        if (authenticationOptions.Enabled)
+        {
+            policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+            policy.RequireAuthenticatedUser();
+            policy.Requirements.Add(new PlatformAdministratorRequirement());
+        }
+        else
+        {
+            policy.RequireAssertion(_ => false);
+        }
+    });
+});
 
 builder.Services.AddHealthChecks()
     .AddPlatformStorageHealthChecks();
