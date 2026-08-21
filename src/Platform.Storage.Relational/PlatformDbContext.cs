@@ -91,7 +91,7 @@ public sealed class PlatformDbContext : DbContext
             // rows are not constrained so history can accumulate.
             e.HasIndex(x => new { x.TenantId, x.NormalizedEmail })
                 .IsUnique()
-                .HasFilter("Status = 'Pending'");
+                .HasFilter("\"Status\" = 'Pending'");
             e.Property(x => x.NormalizedEmail).HasMaxLength(320).IsRequired();
             e.Property(x => x.Status).HasMaxLength(32).IsRequired();
             e.Property(x => x.CreatedByIssuer).HasMaxLength(512).IsRequired();

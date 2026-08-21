@@ -46,7 +46,7 @@ namespace Platform.Storage.Relational.Migrations.PostgreSql
                 table: "tenant_invitations",
                 columns: new[] { "TenantId", "NormalizedEmail" },
                 unique: true,
-                filter: "Status = 'Pending'");
+                filter: "\"Status\" = 'Pending'");
         }
 
         /// <inheritdoc />
