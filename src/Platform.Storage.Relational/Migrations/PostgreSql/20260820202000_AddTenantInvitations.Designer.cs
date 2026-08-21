@@ -246,7 +246,7 @@ namespace Platform.Storage.Relational.Migrations.PostgreSql
 
                     b.HasIndex("TenantId", "NormalizedEmail")
                         .IsUnique()
-                        .HasFilter("Status = 'Pending'");
+                        .HasFilter("\"Status\" = 'Pending'");
 
                     b.ToTable("tenant_invitations", (string)null);
                 });
