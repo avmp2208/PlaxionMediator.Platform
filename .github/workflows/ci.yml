@@ -7,6 +7,20 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: plaxion
+          POSTGRES_USER: plaxion
+          POSTGRES_PASSWORD: plaxion_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U plaxion -d plaxion"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -23,6 +37,8 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build --verbosity normal
+        env:
+          ConnectionStrings__Platform: "Host=localhost;Port=5432;Database=plaxion;Username=plaxion;Password=plaxion_secret"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
