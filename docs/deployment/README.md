@@ -1,8 +1,8 @@
 # Deployment readiness status
 
-**Status date:** 2026-08-17  
-**Branch context:** Backend Deployment Readiness (post Doc B MVP)  
-**Verdict:** See final report in the PR/issue — intended gate: **GO FOR PLATFORM CONTAINERIZATION** once `dotnet test` is green on this branch.
+**Status date:** 2026-11-25 (originally 2026-08-17; refreshed — the "next phase" list below had fallen out of date with what actually shipped)
+**Branch context:** Backend Deployment Readiness (post Doc B MVP)
+**Verdict:** **Containerization and Kubernetes packaging are done.** What's left is proving the whole chain end-to-end on a fresh cluster — see the [plaxion-platform repo](https://github.com/avmp2208/plaxion-platform)'s `docs/installation.md` and the rehearsal step in the platform launch plan.
 
 ## Done in this task
 
@@ -24,17 +24,17 @@
 - [x] Graceful shutdown: background services already honor `CancellationToken` via `PeriodicTimer` / `BackgroundService`
 - [x] Container contract: removed absolute user-profile paths from `launchSettings`; configurable dev key path
 - [x] Docs: this folder
+- [x] **Dockerfile** — single multi-role image (`ROLE=api` serves API + embedded Angular dashboard SPA; `ROLE=ingestion` serves OTLP/HTTP; same image also runs EF migrations via `ROLE=api --migrate`). See `Dockerfile`, `docker/entrypoint.sh`.
+- [x] **Docker Compose** — local multi-service stack. See `docker-compose.yml`.
+- [x] **Container registry push** — `.github/workflows/release.yml` logs into GHCR and publishes the image on `v*.*.*` tag push.
+- [x] **Real PostgreSQL integration validation in CI** — `.github/workflows/ci.yml` runs a live Postgres service; 232/232 backend tests green against it, including dedicated PostgreSQL conformance tests.
+- [x] **Helm / Kubernetes manifests** — maintained in the separate [`plaxion-platform`](https://github.com/avmp2208/plaxion-platform) repo (chart `v0.3.0`: Deployments, Services, Ingress + Traefik IngressRoute, HPA, NetworkPolicy, migration Job hook, 8 example deployment profiles). Not yet published to a public registry/OCI artifact — see that repo's release checklist.
 
-## Explicitly out of scope (next phase)
+## Still out of scope
 
-- [ ] Dockerfiles for Api / Ingestion / Dashboard
-- [ ] Docker Compose (Api + Ingestion + Postgres + Dashboard)
-- [ ] Real PostgreSQL integration validation in CI
-- [ ] Container registry push
-- [ ] Helm / Kubernetes manifests
-- [ ] Staging environment provisioning
-- [ ] CI/CD deploy pipelines
-- [ ] MySQL EF migrations assembly (EnsureCreated only today)
+- [ ] **Staging environment provisioning** — no persistent staging cluster exists yet.
+- [ ] **A real end-to-end release rehearsal** — nobody has run the Helm chart on a genuinely fresh cluster with real external Postgres, real OIDC, and a real app sending real telemetry. Everything above has been verified piecemeal (unit/integration tests, chart lint/template), not as one continuous flow.
+- [ ] MySQL EF migrations assembly (`EnsureCreated` only today; MySQL is also not exposed by the Helm chart, which only supports PostgreSQL)
 - [ ] Doc C/D/E/F product features and CLI product work
 
 ## Required production settings (checklist)

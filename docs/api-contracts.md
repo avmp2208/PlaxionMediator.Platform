@@ -1,12 +1,24 @@
 # API Contracts
 
-## Authentication
-All endpoints below require an `X-Api-Key: <key>` header with a valid, non-revoked API key
-issued by `Platform.Identity.ApiKeyService` for a tenant. `TenantId` is resolved exclusively from
-this trusted, server-side lookup — it is never accepted from the client (e.g. request body,
-query string, OTLP resource attributes, or any other client-supplied field).
+> **Scope note (2026-11-25):** this doc originally covered only the machine/ingestion surface,
+> written before OIDC login shipped. Platform.Api now has two independent authentication
+> surfaces — see below — and a human-facing tenant/invitation surface (added with multi-tenant
+> email invitations). Both are documented here now.
 
+## Authentication — two independent surfaces
+
+**Machine / ingestion surface** — all `Platform.Ingestion` endpoints and the `/v1/api-keys`,
+`/v1/services*` endpoints below require an `X-Api-Key: <key>` header with a valid, non-revoked
+API key issued by `Platform.Identity.ApiKeyService` for a tenant. `TenantId` is resolved
+exclusively from this trusted, server-side lookup — it is never accepted from the client (e.g.
+request body, query string, OTLP resource attributes, or any other client-supplied field).
 Missing/invalid/revoked keys return `401 Unauthorized`.
+
+**Human / Dashboard surface (OIDC)** — the tenant and invitation endpoints below require a JWT
+Bearer token from your configured OIDC provider (Authorization Code + PKCE from the Dashboard
+SPA). This is unrelated to, and never substitutes for, the API-key surface — ingestion always
+uses `X-Api-Key` regardless of whether OIDC is enabled. See
+[tenant-invitations-and-roles.md](./tenant-invitations-and-roles.md) for the authorization model.
 
 ---
 
@@ -170,6 +182,54 @@ published `PlaxionMediator.OpenTelemetry` OSS package — all measurements are t
 `plaxionmediator.request.type` (the request CLR type name), never a handler identifier. Handler-level
 ranking is therefore not implementable without an upstream OSS change and is explicitly out of scope
 here.
+
+---
+
+## Human / Dashboard surface — tenants, memberships, invitations (Platform.Api, OIDC)
+
+All routes in this section use `[Authorize]` against the configured OIDC Bearer token, not
+`X-Api-Key`. `TenantId` is still never accepted from the client — it comes from path parameters
+validated against the caller's claimed memberships, or from server-side JIT-claim matching.
+
+### `GET /v1/platform/config` — unauthenticated
+
+Dashboard bootstrap endpoint, called before login. Returns the OIDC authority/client/scopes
+configuration the SPA needs to start an Authorization Code + PKCE flow. Safe to expose publicly —
+contains no secrets (the OIDC client is a public SPA client by design).
+
+### `GET /v1/tenants`
+
+Policy: `JwtBearer` (any authenticated user). Lists tenants the caller currently has a
+`TenantMembership` row for. On a matching unclaimed invitation (email claim match), the caller is
+JIT-claimed into a `Member` membership before the list is returned — no separate "accept
+invitation" step exists.
+
+### `POST /v1/tenants`
+
+Policy: `TenantCreation` — configurable via `authentication.authorization.tenantCreation.mode`
+(`AnyAuthenticatedUser` | `Role` | `Claim`; production recommendation is `Role`). Self-service
+tenant creation; the creating user becomes that tenant's first `Owner`.
+
+### `POST /v1/invitations`
+
+Policy: `JwtBearer`. Body: `{ email, tenantIds[] }`. Caller must be `Owner` of every tenant in
+`tenantIds`. Creates one invitation per tenant atomically; no email is sent — the invitee is
+JIT-claimed on their next `GET /v1/tenants` call if their validated JWT's email claim matches.
+
+### `GET /v1/invitations`
+
+Policy: `JwtBearer`. Lists invitations the caller can see (scoped to tenants they own).
+
+### `POST /v1/invitations/{invitationId}/revoke`
+
+Policy: `JwtBearer`. Revokes a pending invitation; caller must own the invitation's tenant.
+
+### `POST /v1/tenants/{tenantId}/memberships`
+
+Policy: `PlatformAdministrator` (break-glass only, `Disabled` by default — see
+`authentication.authorization.platformAdministrator.mode`). Explicit membership reconciliation
+for pre-OIDC legacy tenants with zero membership rows. Not part of normal onboarding, which uses
+Owner-issued invitations above.
 
 ---
 
