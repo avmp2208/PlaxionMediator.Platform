@@ -32,3 +32,13 @@ ng serve   # http://localhost:4200
 
 The Dashboard is wired to `Platform.Api`: sign in, view your tenants and
 services, and see per-service throughput/latency/failure-rate charts.
+
+## Deployment
+
+Kubernetes packaging (Helm chart, example `values.yaml` profiles, OIDC setup
+guides) lives in the separate [`plaxion-platform`](https://github.com/avmp2208/plaxion-platform)
+repository — this repo is the application source only.
+
+## License
+
+MIT — see [LICENSE](./LICENSE).
